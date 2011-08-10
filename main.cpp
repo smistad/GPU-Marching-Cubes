@@ -1,25 +1,39 @@
-#include "hpmc.hpp"
+#include "gpu-mc.hpp"
+#include "rawUtilities.hpp"
+#include <iostream>
+using namespace std;
 
 int main(int argc, char ** argv) {
-    /* Initialize GLUT */
-    glutInit(&argc, argv);
-    glutInitDisplayMode(GLUT_DEPTH | GLUT_DOUBLE | GLUT_RGBA);
-    glutInitWindowPosition(0, 0);
-    glutInitWindowSize(glutGet(GLUT_SCREEN_WIDTH),glutGet(GLUT_SCREEN_HEIGHT));
-    glutCreateWindow("HistoPyramid Marching Cubes with OpenCL");
-    glutFullScreen();	
-    glutDisplayFunc(renderScene);
-    glutIdleFunc(idle);
-    glutReshapeFunc(reshape);
-	glutKeyboardFunc(keyboard);
-	glutMotionFunc(mouseMovement);
-    
+
+    // Process arguments
+    if(argc == 5 || argc == 8) {
+        char * filename = argv[1];
+        int sizeX = atoi(argv[2]);
+        int sizeY = atoi(argv[3]);
+        int sizeZ = atoi(argv[4]);
+        int stepSizeX = 1;
+        int stepSizeY = 1;
+        int stepSizeZ = 1;
+        if(argc == 8) {
+            stepSizeX = atoi(argv[5]);
+            stepSizeY = atoi(argv[6]);
+            stepSizeZ = atoi(argv[7]);
+        }
+        unsigned char * voxels = readRawFile(filename, sizeX, sizeY, sizeZ, stepSizeX, stepSizeY, stepSizeZ);
+        if(voxels == NULL) {
+            cout << "File '" << filename << "' not found!" << endl;             return EXIT_FAILURE;
+        }
+        setupOpenGL(&argc,argv);
+        setupOpenCL(voxels, sizeX/stepSizeX, sizeY/stepSizeY, sizeZ/stepSizeZ);
+        run();
+    } else {
+        cout << "usage: filename.raw sizeX sizeY sizeZ [stepSizeX stepSizeY stepSizeZ]" << endl;
+    }
 
 
-    setupOpenGL();
-    setupOpenCL();
+            
 
-    glutMainLoop();
+
 
     return 0;
 }

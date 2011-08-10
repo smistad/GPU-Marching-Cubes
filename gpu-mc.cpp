@@ -1,4 +1,4 @@
-#include "hpmc.hpp"
+#include "gpu-mc.hpp"
 #include "openCLUtilities.hpp"
 
 // Define some globals
@@ -10,7 +10,6 @@ Context context;
 
 Size VOLUME_SIZE = {256,256,256};
 Size STEP_SIZE = {1,1,1};
-char * filename = "skull.raw";
 int isolevel = 50;
 int windowWidth, windowHeight;
 
@@ -179,7 +178,24 @@ void renderScene() {
 
 }
 
-void setupOpenGL() {
+
+void run() {
+    glutMainLoop();
+}
+
+void setupOpenGL(int * argc, char ** argv) {
+    /* Initialize GLUT */
+    glutInit(argc, argv);
+    glutInitDisplayMode(GLUT_DEPTH | GLUT_DOUBLE | GLUT_RGBA);
+    glutInitWindowPosition(0, 0);
+    glutInitWindowSize(glutGet(GLUT_SCREEN_WIDTH),glutGet(GLUT_SCREEN_HEIGHT));
+    glutCreateWindow("HistoPyramid Marching Cubes with OpenCL");
+    glutFullScreen();	
+    glutDisplayFunc(renderScene);
+    glutIdleFunc(idle);
+    glutReshapeFunc(reshape);
+	glutKeyboardFunc(keyboard);
+	glutMotionFunc(mouseMovement);
     glewInit();
 	glEnable(GL_NORMALIZE);
 	glEnable(GL_DEPTH_TEST);
@@ -248,8 +264,11 @@ void keyboard(unsigned char key, int x, int y) {
 	}
 }
 
-void setupOpenCL() {
-	
+void setupOpenCL(uchar * voxels, int sizeX, int sizeY, int sizeZ) {
+    
+    VOLUME_SIZE.x = sizeX;
+    VOLUME_SIZE.y = sizeY;
+    VOLUME_SIZE.z = sizeZ;
    try { 
         // Get available platforms
         vector<Platform> platforms;
@@ -276,7 +295,7 @@ void setupOpenCL() {
         queue = CommandQueue(context, devices[0]);
 
         // Read source file
-        std::ifstream sourceFile("hpmc.cl");
+        std::ifstream sourceFile("gpu-mc.cl");
         if(sourceFile.fail()) {
             std::cout << "Failed to open OpenCL source file" << std::endl;
             exit(-1);
@@ -322,7 +341,15 @@ void setupOpenCL() {
             bufferSize /= 2;
         }
 
-        parseRawFile(filename);
+        // Transfer dataset to device
+		rawData = Image3D(
+                context, 
+                CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, 
+                ImageFormat(CL_R, CL_UNSIGNED_INT8), 
+                VOLUME_SIZE.x, VOLUME_SIZE.y, VOLUME_SIZE.z,
+                0, 0, voxels
+        );
+        delete[] voxels;
 
 		// Make kernels
 		constructHPLevelKernel = Kernel(program, "constructHPLevel");
@@ -332,7 +359,6 @@ void setupOpenCL() {
     } catch(Error error) {
        std::cout << error.what() << "(" << error.err() << ")" << std::endl;
        std::cout << getCLErrorString(error.err()) << std::endl;
-       system("pause");
     }
 }
 

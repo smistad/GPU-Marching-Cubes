@@ -25,8 +25,9 @@
 
 using namespace cl;
 
-void setupOpenGL();
-void setupOpenCL();
+void setupOpenGL(int *, char **);
+void setupOpenCL(unsigned char * voxels, int sizeX, int sizeY, int sizeZ);
+void run();
 void renderScene();
 void idle();
 void reshape(int width, int height);
