@@ -1,0 +1,460 @@
+#include "hpmc.hpp"
+#include "openCLUtilities.hpp"
+
+// Define some globals
+GLuint VBO_ID = 0;
+GLfloat angle = 0.0f;
+Program program;
+CommandQueue queue;
+Context context;
+
+Size VOLUME_SIZE = {256,256,256};
+Size STEP_SIZE = {1,1,1};
+char * filename = "skull.raw";
+int isolevel = 50;
+int windowWidth, windowHeight;
+
+Image3D rawData;
+Kernel constructHPLevelKernel;
+Kernel classifyCubesKernel;
+Kernel traverseHPKernel;
+vector<Image3D> images;
+
+Sizef scalingFactor = {1.5f/(VOLUME_SIZE.x/STEP_SIZE.x), 1.5f/(VOLUME_SIZE.x/STEP_SIZE.x), 1.5f/(VOLUME_SIZE.x/STEP_SIZE.x)};
+Sizef translation = {(float)VOLUME_SIZE.x/(2.0f*STEP_SIZE.x), -(float)VOLUME_SIZE.x/2.0f , -(float)VOLUME_SIZE.x/2};
+
+float camX, camY, camZ = 4.0f; //X, Y, and Z
+float lastx, lasty, xrot, yrot, xrotrad, yrotrad; //Last pos and rotation
+float speed = 0.1f; //Movement speed
+
+void mouseMovement(int x, int y) {
+    int cx = windowWidth/2;
+    int cy = windowHeight/2;
+     
+    if(x == cx && y == cy){ //The if cursor is in the middle
+        return;
+    }
+     
+    int diffx=x-cx; //check the difference between the current x and the last x position
+    int diffy=y-cy; //check the difference between the current y and the last y position
+    xrot += (float)diffy/2; //set the xrot to xrot with the addition of the difference in the y position
+    yrot += (float)diffx/2;// set the xrot to yrot with the addition of the difference in the x position
+    glutWarpPointer(cx, cy); //Bring the cursor to the middle
+}
+
+void renderBitmapString(float x, float y, float z, void *font, char *string) {  
+    char *c;
+    glRasterPos3f(x, y,z);
+    for(c = string; *c != '\0'; c++) {
+        glutBitmapCharacter(font, *c);
+    }
+}
+
+int frame = 0;
+int timebase = 0;
+char s[60];
+int previousTime = 0;
+void drawFPSCounter(int sum) {
+	frame++;
+
+    int time = glutGet(GLUT_ELAPSED_TIME);
+	if (time - timebase > 1000) { // 1 times per second
+		sprintf(s,"Marching Cubes - Triangles: %d FPS: %4.2f Speed: %d ms", sum, frame*1000.0/(time-timebase), time - previousTime);
+		timebase = time;
+		frame = 0;
+	}
+
+	previousTime = time;
+    glutSetWindowTitle(s);
+}
+
+void idle() {
+    glutPostRedisplay();
+}
+
+void reshape(int width, int height) {
+    windowWidth = width;
+    windowHeight = height;
+	glMatrixMode(GL_PROJECTION);
+    glViewport(0, 0, width, height);
+	gluPerspective(45.0f, (GLfloat)width/(GLfloat)height, 0.5f, 10000.0f);
+}
+cl::size_t<3> origin; //offset
+cl::size_t<3> region;
+void renderScene() {
+    histoPyramidConstruction();
+
+    // Read top of histoPyramid an use this size to allocate VBO below
+	int sum[8] = {0,0,0,0,0,0,0,0};
+    queue.enqueueReadImage(images[images.size()-1], CL_FALSE, origin, region, 0, 0, sum);
+
+	// Draw FPS counter
+	glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
+
+
+	queue.finish();
+	int totalSum = sum[0] + sum[1] + sum[2] + sum[3] + sum[4] + sum[5] + sum[6] + sum[7] ;
+    
+	if(totalSum == 0) {
+		std::cout << "HistoPyramid result is 0" << std::endl;
+        return;
+	}
+	
+	// 128 MB
+	//if(totalSum >= 1864135) // Need to split into several VBO's to support larger structures
+	//	isolevel_up = true;
+
+	// Create new VBO
+	glGenBuffers(1, &VBO_ID);
+	glBindBuffer(GL_ARRAY_BUFFER, VBO_ID);
+	glBufferData(GL_ARRAY_BUFFER, totalSum*18*sizeof(cl_float), NULL, GL_STATIC_DRAW);
+	//std::cout << "VBO using: " << sum[0]*18*sizeof(cl_float) / (1024*1024) << " M bytes" << std::endl;
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    // Traverse the histoPyramid and fill VBO
+    histoPyramidTraversal(totalSum);
+
+    // Render VBO
+    glMatrixMode(GL_MODELVIEW);
+	glLoadIdentity();
+	//glRotatef(270.0f, 1.0f, 0.0f, 0.0f);	
+	drawFPSCounter(totalSum);
+
+
+	glTranslatef(-camX, -camY, -camZ);
+
+	glRotatef(xrot,1.0,0.0,0.0);
+	glRotatef(yrot,0.0, 1.0, 0.0);
+
+
+    // Draw axis
+    glPushMatrix();
+    glBegin(GL_LINES);
+        glColor3f(1.0f, 0.0f, 0.0f);
+        glVertex3f(0.0f, 0.0f, 0.0f);
+        glVertex3f(0.0f, 2.0f, 0.0f);
+
+        glVertex3f(0.0f, 0.0f, 0.0f);
+        glVertex3f(2.0f, 0.0f, 0.0f);
+
+        glVertex3f(0.0f, 0.0f, 0.0f);
+        glVertex3f(0.0f, 0.0f, 2.0f);
+
+
+        //glScalef(100.f, 100.0f, 100.0f);
+        //glVertex3f(0.0f, 0.0f, 0.0f);
+        //glVertex3f(0.0f, cos(xrot/ 180 * 3.141592654f),-sin(xrot/ 180 * 3.141592654f));
+    glEnd();
+    glPopMatrix();
+
+
+    glPushMatrix();
+    glColor3f(1.0f, 1.0f, 1.0f);
+    glScalef(scalingFactor.x, scalingFactor.y, scalingFactor.z);
+    glTranslatef(translation.x, translation.y, translation.z);
+
+    glRotatef(90.0f, 0.0f, 0.0f, 1.0f);
+    // Normal Buffer
+    glBindBuffer(GL_ARRAY_BUFFER, VBO_ID);
+    glEnableClientState(GL_VERTEX_ARRAY);
+    glEnableClientState(GL_NORMAL_ARRAY);
+
+    glVertexPointer(3, GL_FLOAT, 24, BUFFER_OFFSET(0));
+	glNormalPointer(GL_FLOAT, 24, BUFFER_OFFSET(12));    
+
+	queue.finish();
+	//glWaitSync(traversalSync, 0, GL_TIMEOUT_IGNORED);
+    glDrawArrays(GL_TRIANGLES, 0, totalSum*3);
+	
+    // Release buffer
+    glBindBuffer(GL_ARRAY_BUFFER, 0); 
+    glDisableClientState(GL_VERTEX_ARRAY);
+    glDisableClientState(GL_NORMAL_ARRAY);
+
+    glPopMatrix();
+    glutSwapBuffers();
+    glDeleteBuffers(1, &VBO_ID);
+	
+    angle += 0.1f;
+
+}
+
+void setupOpenGL() {
+    glewInit();
+	glEnable(GL_NORMALIZE);
+	glEnable(GL_DEPTH_TEST);
+	glShadeModel(GL_SMOOTH);
+	glEnable(GL_LIGHT0);
+	glEnable(GL_LIGHTING);
+
+	// Set material properties which will be assigned by glColor
+	GLfloat color[] = { 1.0f, 1.0f, 1.0f, 1.0f };
+	glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, color);
+    GLfloat specReflection[] = { 0.8f, 0.8f, 0.8f, 1.0f };
+    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, specReflection);
+    GLfloat shininess[] = { 16.0f };
+    glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, shininess);
+
+    // Create light components
+    GLfloat ambientLight[] = { 0.3f, 0.3f, 0.3f, 1.0f };
+    GLfloat diffuseLight[] = { 0.7f, 0.7f, 0.7f, 1.0f };
+    GLfloat specularLight[] = { 1.0f, 1.0f, 1.0f, 1.0f };
+    GLfloat position[] = { -0.0f, 4.0f, 1.0f, 1.0f };
+     
+    // Assign created components to GL_LIGHT0
+    glLightfv(GL_LIGHT0, GL_AMBIENT, ambientLight);
+    glLightfv(GL_LIGHT0, GL_DIFFUSE, diffuseLight);
+    glLightfv(GL_LIGHT0, GL_SPECULAR, specularLight);
+    glLightfv(GL_LIGHT0, GL_POSITION, position);
+
+	origin[0] = 0;
+	origin[1] = 0;
+	origin[2] = 0; 
+	region[0] = 2;
+	region[1] = 2;
+	region[2] = 2;
+
+
+	if(glewIsExtensionSupported("ARB_cl_event")) {
+		std::cout << "weeee! cl_event supported" << std::endl;
+	}
+}
+
+void keyboard(unsigned char key, int x, int y) {
+	switch(key) {
+		case '+':
+			isolevel ++;
+		break;
+		case '-':
+			isolevel --;
+		break;
+        //WASD movement
+        case 'w':
+            camZ -= 0.1f;
+        break;
+        case 's':
+            camZ += 0.1f;
+        break;
+        case 'a':
+            camX -= 0.1f;
+            break;
+        case 'd':
+            camX += 0.1f;
+        break;
+        case 27:
+            //TODO some clean up
+            exit(0);
+        break;
+	}
+}
+
+void setupOpenCL() {
+	
+   try { 
+        // Get available platforms
+        vector<Platform> platforms;
+        Platform::get(&platforms);
+
+        // Select the default platform and create a context using this platform and the GPU
+        cl_context_properties cps[7] = { 
+			#ifdef WIN32
+			CL_GL_CONTEXT_KHR, (cl_context_properties)wglGetCurrentContext(),
+			CL_WGL_HDC_KHR, (cl_context_properties)wglGetCurrentDC(),
+			#else
+            CL_GL_CONTEXT_KHR, (cl_context_properties)glXGetCurrentContext(),
+            CL_GLX_DISPLAY_KHR, (cl_context_properties)glXGetCurrentDisplay(),
+			#endif
+            CL_CONTEXT_PLATFORM, (cl_context_properties)(platforms[0])(), 
+            0 
+        };
+		context = Context( CL_DEVICE_TYPE_GPU, cps);
+
+        // Get a list of devices on this platform
+		vector<Device> devices = context.getInfo<CL_CONTEXT_DEVICES>();
+
+        // Create a command queue and use the first device
+        queue = CommandQueue(context, devices[0]);
+
+        // Read source file
+        std::ifstream sourceFile("hpmc.cl");
+        if(sourceFile.fail()) {
+            std::cout << "Failed to open OpenCL source file" << std::endl;
+            exit(-1);
+        }
+        std::string sourceCode(
+            std::istreambuf_iterator<char>(sourceFile),
+            (std::istreambuf_iterator<char>()));
+        Program::Sources source(1, std::make_pair(sourceCode.c_str(), sourceCode.length()+1));
+
+        // Make program of the source code in the context
+        program = Program(context, source);
+    
+        // Build program for these specific devices
+        try{
+            program.build(devices);
+        } catch(Error error) {
+            if(error.err() == CL_BUILD_PROGRAM_FAILURE) {
+                std::cout << "Build log:\t" << program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(devices[0]) << std::endl;
+				system("pause");
+            }   
+            throw error;
+        } 
+
+        // Create memory buffers
+		ImageFormat imageFormat = ImageFormat(CL_R, CL_UNSIGNED_INT32);
+        int bufferSize = VOLUME_SIZE.z / STEP_SIZE.z;
+		// Make the two first buffers use INT8
+		images.push_back(Image3D(context, CL_MEM_READ_WRITE, ImageFormat(CL_RGBA, CL_UNSIGNED_INT8), bufferSize, bufferSize, bufferSize));
+		bufferSize /= 2;
+		images.push_back(Image3D(context, CL_MEM_READ_WRITE, ImageFormat(CL_R, CL_UNSIGNED_INT8), bufferSize, bufferSize, bufferSize));
+		bufferSize /= 2;
+		// And the third, fourth and fifth INT16
+		images.push_back(Image3D(context, CL_MEM_READ_WRITE, ImageFormat(CL_R, CL_UNSIGNED_INT16), bufferSize, bufferSize, bufferSize));
+		bufferSize /= 2;
+		images.push_back(Image3D(context, CL_MEM_READ_WRITE, ImageFormat(CL_R, CL_UNSIGNED_INT16), bufferSize, bufferSize, bufferSize));
+		bufferSize /= 2;
+		images.push_back(Image3D(context, CL_MEM_READ_WRITE, ImageFormat(CL_R, CL_UNSIGNED_INT16), bufferSize, bufferSize, bufferSize));
+		bufferSize /= 2;
+        for(int i = 5; i < (log((float)VOLUME_SIZE.z / STEP_SIZE.z)/log(2.0f)); i ++) {
+			if(bufferSize == 1)
+				bufferSize = 2; // Image cant be 1x1x1
+			images.push_back(Image3D(context, CL_MEM_READ_WRITE, imageFormat, bufferSize, bufferSize, bufferSize));
+            bufferSize /= 2;
+        }
+
+        parseRawFile(filename);
+
+		// Make kernels
+		constructHPLevelKernel = Kernel(program, "constructHPLevel");
+		classifyCubesKernel = Kernel(program, "classifyCubes");
+		traverseHPKernel = Kernel(program, "traverseHP");
+
+    } catch(Error error) {
+       std::cout << error.what() << "(" << error.err() << ")" << std::endl;
+       std::cout << getCLErrorString(error.err()) << std::endl;
+       system("pause");
+    }
+}
+
+
+void histoPyramidConstruction() {
+
+        updateScalarField();
+
+        // Run base to first level
+		constructHPLevelKernel.setArg(0, images[0]);
+		constructHPLevelKernel.setArg(1, images[1]);
+
+        queue.enqueueNDRangeKernel(
+			constructHPLevelKernel, 
+			NullRange, 
+			NDRange(VOLUME_SIZE.x/(STEP_SIZE.x*2), VOLUME_SIZE.y/(STEP_SIZE.y*2), VOLUME_SIZE.z/(STEP_SIZE.z*2)), 
+			NullRange
+		);
+
+		Size previous = {VOLUME_SIZE.x/(STEP_SIZE.x*2), VOLUME_SIZE.y/(STEP_SIZE.y*2), VOLUME_SIZE.z/(STEP_SIZE.z*2)};
+
+        // Run level 2 to top level
+        for(int i = 1; i < log((float)VOLUME_SIZE.z/STEP_SIZE.z)/log(2.0f)-1; i++) {
+			constructHPLevelKernel.setArg(0, images[i]);
+			constructHPLevelKernel.setArg(1, images[i+1]);
+            queue.enqueueNDRangeKernel(
+				constructHPLevelKernel, 
+				NullRange, 
+				NDRange(previous.x/2, previous.y/2, previous.z/2), 
+                NullRange
+			);
+			previous.x /= 2;
+			previous.y /= 2;
+			previous.z /= 2;
+        }
+}
+
+void updateScalarField() {
+
+
+    classifyCubesKernel.setArg(0, images[0]);
+    classifyCubesKernel.setArg(1, rawData);
+	classifyCubesKernel.setArg(2, isolevel);
+    queue.enqueueNDRangeKernel(
+            classifyCubesKernel, 
+            NullRange, 
+            NDRange(VOLUME_SIZE.x/STEP_SIZE.x, VOLUME_SIZE.y/STEP_SIZE.y, VOLUME_SIZE.z/STEP_SIZE.z), 
+            NullRange
+    );
+}
+
+BufferGL VBOBuffer;
+void histoPyramidTraversal(int sum) {
+    // Make OpenCL buffer from OpenGL buffer
+	int i = 0;
+	for(i = 0; i < images.size(); i++) {
+		traverseHPKernel.setArg(i, images[i]);
+	}
+	
+	VBOBuffer = BufferGL(context, CL_MEM_WRITE_ONLY, VBO_ID);
+    traverseHPKernel.setArg(i, VBOBuffer);
+	traverseHPKernel.setArg(i+1, isolevel);
+	traverseHPKernel.setArg(i+2, sum);
+	//cl_event syncEvent = clCreateEventFromGLsyncKHR((cl_context)context(), (cl_GLsync)glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0), 0);
+	//glFinish();
+	vector<Memory> v;
+	v.push_back(VBOBuffer);
+	//vector<Event> events;
+	//Event e;
+	//events.push_back(Event(syncEvent));
+    queue.enqueueAcquireGLObjects(&v);
+
+    // Run a NDRange kernel over this buffer which traverses back to the base level
+
+	// Increase the global_work_size so that it is divideable by 64
+	int global_work_size = sum + 64 - (sum - 64*(sum / 64));
+    queue.enqueueNDRangeKernel(traverseHPKernel, NullRange, NDRange(global_work_size), NDRange(64));
+
+
+	Event traversalEvent;	
+    queue.enqueueReleaseGLObjects(&v, 0, &traversalEvent);
+//	traversalSync = glCreateSyncFromCLeventARB((cl_context)context(), (cl_event)traversalEvent(), 0); // Need the GL_ARB_cl_event extension
+    queue.flush();
+}
+
+void parseRawFile(char * filename) {
+    // Parse the specified raw file and transfer it to the device
+    int rawDataSize = VOLUME_SIZE.x*VOLUME_SIZE.y*VOLUME_SIZE.z;   
+
+    uchar * rawVoxels = new uchar[rawDataSize];
+	uchar * voxels = new uchar[rawDataSize / ( STEP_SIZE.x*STEP_SIZE.y*STEP_SIZE.z)];
+    FILE * file = fopen(filename, "rb");
+    if(file == NULL) {
+        printf("File not found: %s\n", filename);
+        exit(-1);
+    }
+
+    fread(rawVoxels, sizeof(uchar), rawDataSize, file);
+	if(STEP_SIZE.x == 1 && STEP_SIZE.y == 1 && STEP_SIZE.z == 1) {
+		voxels = rawVoxels;
+		rawData = Image3D(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, 
+			ImageFormat(CL_R, CL_UNSIGNED_INT8), VOLUME_SIZE.x, VOLUME_SIZE.y, VOLUME_SIZE.z, 
+			0, 0, voxels);
+		delete voxels;
+	} else {
+		int i = 0;
+		for(int z = 0; z < VOLUME_SIZE.z; z += STEP_SIZE.z) {
+			for(int y = 0; y < VOLUME_SIZE.y; y += STEP_SIZE.y) {
+				for(int x = 0; x < VOLUME_SIZE.x; x += STEP_SIZE.x) {
+					voxels[i] = rawVoxels[x + y*VOLUME_SIZE.x + z*VOLUME_SIZE.x*VOLUME_SIZE.y];
+					i++;
+				}
+			}
+		}
+		//FILE * file2 = fopen("vertebra8_64.raw", "wb");
+		//fwrite(voxels, sizeof(uchar), rawDataSize / ( STEP_SIZE.x*STEP_SIZE.y*STEP_SIZE.z), file2);
+		rawData = Image3D(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, 
+			ImageFormat(CL_R, CL_UNSIGNED_INT8), VOLUME_SIZE.x/STEP_SIZE.x, VOLUME_SIZE.y/STEP_SIZE.y, VOLUME_SIZE.z/STEP_SIZE.z, 
+			0,0, voxels);
+		delete rawVoxels;
+		delete voxels;
+	}
+}
+
+
