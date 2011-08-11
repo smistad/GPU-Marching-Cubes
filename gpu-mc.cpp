@@ -9,7 +9,6 @@ CommandQueue queue;
 Context context;
 
 Size VOLUME_SIZE = {256,256,256};
-Size STEP_SIZE = {1,1,1};
 int isolevel = 50;
 int windowWidth, windowHeight;
 
@@ -19,8 +18,8 @@ Kernel classifyCubesKernel;
 Kernel traverseHPKernel;
 vector<Image3D> images;
 
-Sizef scalingFactor = {1.5f/(VOLUME_SIZE.x/STEP_SIZE.x), 1.5f/(VOLUME_SIZE.x/STEP_SIZE.x), 1.5f/(VOLUME_SIZE.x/STEP_SIZE.x)};
-Sizef translation = {(float)VOLUME_SIZE.x/(2.0f*STEP_SIZE.x), -(float)VOLUME_SIZE.x/2.0f , -(float)VOLUME_SIZE.x/2};
+Sizef scalingFactor;
+Sizef translation;
 
 float camX, camY, camZ = 4.0f; //X, Y, and Z
 float lastx, lasty, xrot, yrot, xrotrad, yrotrad; //Last pos and rotation
@@ -87,10 +86,7 @@ void renderScene() {
 	int sum[8] = {0,0,0,0,0,0,0,0};
     queue.enqueueReadImage(images[images.size()-1], CL_FALSE, origin, region, 0, 0, sum);
 
-	// Draw FPS counter
 	glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
-
-
 	queue.finish();
 	int totalSum = sum[0] + sum[1] + sum[2] + sum[3] + sum[4] + sum[5] + sum[6] + sum[7] ;
     
@@ -196,6 +192,7 @@ void setupOpenGL(int * argc, char ** argv) {
     glutReshapeFunc(reshape);
 	glutKeyboardFunc(keyboard);
 	glutMotionFunc(mouseMovement);
+
     glewInit();
 	glEnable(GL_NORMALIZE);
 	glEnable(GL_DEPTH_TEST);
@@ -229,8 +226,13 @@ void setupOpenGL(int * argc, char ** argv) {
 	region[0] = 2;
 	region[1] = 2;
 	region[2] = 2;
-
-
+    scalingFactor.x = 1.5f/(VOLUME_SIZE.x);
+    scalingFactor.y = 1.5f/(VOLUME_SIZE.y);
+    scalingFactor.z = 1.5f/(VOLUME_SIZE.z);
+    
+    translation.x = (float)VOLUME_SIZE.x/2.0f;
+    translation.y = -(float)VOLUME_SIZE.x/2.0f;
+    translation.z = -(float)VOLUME_SIZE.x/2.0f;
 	if(glewIsExtensionSupported("ARB_cl_event")) {
 		std::cout << "weeee! cl_event supported" << std::endl;
 	}
@@ -306,7 +308,7 @@ void setupOpenCL(uchar * voxels, int sizeX, int sizeY, int sizeZ) {
 
         // Create memory buffers
 		ImageFormat imageFormat = ImageFormat(CL_R, CL_UNSIGNED_INT32);
-        int bufferSize = VOLUME_SIZE.z / STEP_SIZE.z;
+        int bufferSize = VOLUME_SIZE.z;
 		// Make the two first buffers use INT8
 		images.push_back(Image3D(context, CL_MEM_READ_WRITE, ImageFormat(CL_RGBA, CL_UNSIGNED_INT8), bufferSize, bufferSize, bufferSize));
 		bufferSize /= 2;
@@ -319,7 +321,7 @@ void setupOpenCL(uchar * voxels, int sizeX, int sizeY, int sizeZ) {
 		bufferSize /= 2;
 		images.push_back(Image3D(context, CL_MEM_READ_WRITE, ImageFormat(CL_R, CL_UNSIGNED_INT16), bufferSize, bufferSize, bufferSize));
 		bufferSize /= 2;
-        for(int i = 5; i < (log((float)VOLUME_SIZE.z / STEP_SIZE.z)/log(2.0f)); i ++) {
+        for(int i = 5; i < (log2((float)VOLUME_SIZE.z )); i ++) {
 			if(bufferSize == 1)
 				bufferSize = 2; // Image cant be 1x1x1
 			images.push_back(Image3D(context, CL_MEM_READ_WRITE, imageFormat, bufferSize, bufferSize, bufferSize));
@@ -359,14 +361,14 @@ void histoPyramidConstruction() {
         queue.enqueueNDRangeKernel(
 			constructHPLevelKernel, 
 			NullRange, 
-			NDRange(VOLUME_SIZE.x/(STEP_SIZE.x*2), VOLUME_SIZE.y/(STEP_SIZE.y*2), VOLUME_SIZE.z/(STEP_SIZE.z*2)), 
+			NDRange(VOLUME_SIZE.x/2, VOLUME_SIZE.y/2, VOLUME_SIZE.z/2), 
 			NullRange
 		);
 
-		Size previous = {VOLUME_SIZE.x/(STEP_SIZE.x*2), VOLUME_SIZE.y/(STEP_SIZE.y*2), VOLUME_SIZE.z/(STEP_SIZE.z*2)};
+		Size previous = {VOLUME_SIZE.x/2, VOLUME_SIZE.y/2, VOLUME_SIZE.z/2};
 
         // Run level 2 to top level
-        for(int i = 1; i < log((float)VOLUME_SIZE.z/STEP_SIZE.z)/log(2.0f)-1; i++) {
+        for(int i = 1; i < log((float)VOLUME_SIZE.z)/log(2.0f)-1; i++) {
 			constructHPLevelKernel.setArg(0, images[i]);
 			constructHPLevelKernel.setArg(1, images[i+1]);
             queue.enqueueNDRangeKernel(
@@ -382,15 +384,13 @@ void histoPyramidConstruction() {
 }
 
 void updateScalarField() {
-
-
     classifyCubesKernel.setArg(0, images[0]);
     classifyCubesKernel.setArg(1, rawData);
 	classifyCubesKernel.setArg(2, isolevel);
     queue.enqueueNDRangeKernel(
             classifyCubesKernel, 
             NullRange, 
-            NDRange(VOLUME_SIZE.x/STEP_SIZE.x, VOLUME_SIZE.y/STEP_SIZE.y, VOLUME_SIZE.z/STEP_SIZE.z), 
+            NDRange(VOLUME_SIZE.x, VOLUME_SIZE.y, VOLUME_SIZE.z), 
             NullRange
     );
 }
@@ -416,12 +416,10 @@ void histoPyramidTraversal(int sum) {
 	//events.push_back(Event(syncEvent));
     queue.enqueueAcquireGLObjects(&v);
 
-    // Run a NDRange kernel over this buffer which traverses back to the base level
-
 	// Increase the global_work_size so that it is divideable by 64
 	int global_work_size = sum + 64 - (sum - 64*(sum / 64));
+    // Run a NDRange kernel over this buffer which traverses back to the base level
     queue.enqueueNDRangeKernel(traverseHPKernel, NullRange, NDRange(global_work_size), NDRange(64));
-
 
 	Event traversalEvent;	
     queue.enqueueReleaseGLObjects(&v, 0, &traversalEvent);
