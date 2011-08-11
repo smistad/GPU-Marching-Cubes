@@ -176,10 +176,10 @@ void run() {
 void setupOpenGL(int * argc, char ** argv, int size, int sizeX, int sizeY, int sizeZ) {
     /* Initialize GLUT */
     glutInit(argc, argv);
-    glutInitDisplayMode(GLUT_DEPTH | GLUT_DOUBLE | GLUT_RGBA);
+    glutInitDisplayMode(GLUT_DEPTH | GLUT_DOUBLE);
     glutInitWindowPosition(0, 0);
     glutInitWindowSize(glutGet(GLUT_SCREEN_WIDTH),glutGet(GLUT_SCREEN_HEIGHT));
-    glutCreateWindow("HistoPyramid Marching Cubes with OpenCL");
+    glutCreateWindow("GPU Marching Cubes");
     glutFullScreen();	
     glutDisplayFunc(renderScene);
     glutIdleFunc(idle);
@@ -292,6 +292,14 @@ int prepareDataset(uchar ** voxels, int sizeX, int sizeY, int sizeZ) {
     return size;
 }
 
+#include <sstream>
+
+template <class T>
+inline std::string to_string(const T& t) {
+    std::stringstream ss;
+    ss << t;
+    return ss.str();
+}
 
 void setupOpenCL(uchar * voxels, int size) {
     SIZE = size; 
@@ -314,6 +322,10 @@ void setupOpenCL(uchar * voxels, int size) {
         std::string sourceCode(
             std::istreambuf_iterator<char>(sourceFile),
             (std::istreambuf_iterator<char>()));
+        
+        // Insert size
+        int pos = sourceCode.find("**HP_SIZE**");
+        sourceCode = sourceCode.replace(pos, 11, to_string(SIZE));
         Program::Sources source(1, std::make_pair(sourceCode.c_str(), sourceCode.length()+1));
 
         // Make program of the source code in the context

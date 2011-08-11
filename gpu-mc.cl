@@ -379,6 +379,7 @@ __constant char triTable[4096] =
 0, 3, 8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
 -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
 
+#define SIZE **HP_SIZE**
 __kernel void traverseHP(
         __read_only image3d_t hp0, // Largest HP
 		__read_only image3d_t hp1,
@@ -386,9 +387,18 @@ __kernel void traverseHP(
 		__read_only image3d_t hp3,
 		__read_only image3d_t hp4,
 		__read_only image3d_t hp5,
+        #if SIZE > 64
 		__read_only image3d_t hp6,
+        #endif
+        #if SIZE > 128
 		__read_only image3d_t hp7,
-		//__read_only image3d_t hp8, // Smallest HP
+        #endif
+        #if SIZE > 256
+		__read_only image3d_t hp8, 
+        #endif
+        #if SIZE > 512
+		__read_only image3d_t hp9, 
+        #endif
         __global float * VBOBuffer,
 		__private int isolevel,
 		__private int sum
@@ -399,15 +409,24 @@ __kernel void traverseHP(
 		target = 0;
 
 	int4 cubePosition = {0,0,0,0}; // x,y,z,sum
-	//cubePosition = scanHPLevel(target, hp8, cubePosition);
-	cubePosition = scanHPLevel(target, hp7, cubePosition);
-	cubePosition = scanHPLevel(target, hp6, cubePosition);
-	cubePosition = scanHPLevel(target, hp5, cubePosition);
-	cubePosition = scanHPLevel(target, hp4, cubePosition);
-	cubePosition = scanHPLevel(target, hp3, cubePosition);
-	cubePosition = scanHPLevel(target, hp2, cubePosition);
-	cubePosition = scanHPLevel(target, hp1, cubePosition);
-	cubePosition = scanHPLevel(target, hp0, cubePosition);
+    #if SIZE > 512
+    cubePosition = scanHPLevel(target, hp9, cubePosition);
+    #endif
+    #if SIZE > 256
+    cubePosition = scanHPLevel(target, hp8, cubePosition);
+    #endif
+    #if SIZE > 128
+    cubePosition = scanHPLevel(target, hp7, cubePosition);
+    #endif
+    #if SIZE > 64
+    cubePosition = scanHPLevel(target, hp6, cubePosition);
+    #endif
+    cubePosition = scanHPLevel(target, hp5, cubePosition);
+    cubePosition = scanHPLevel(target, hp4, cubePosition);
+    cubePosition = scanHPLevel(target, hp3, cubePosition);
+    cubePosition = scanHPLevel(target, hp2, cubePosition);
+    cubePosition = scanHPLevel(target, hp1, cubePosition);
+    cubePosition = scanHPLevel(target, hp0, cubePosition);
 	cubePosition.x = cubePosition.x / 2;
 	cubePosition.y = cubePosition.y / 2;
 	cubePosition.z = cubePosition.z / 2;
@@ -417,7 +436,6 @@ __kernel void traverseHP(
 
 	// max 5 triangles
 	for(int i = (target-cubePosition.s3)*3; i < (target-cubePosition.s3+1)*3; i++) { // for each vertex in triangle
-		//printf("Cubedata.y: %d %d %d %d\n", cubeData.x, cubeData.y, cubeData.z, cubeData.w);
 		const uchar edge = triTable[cubeData.y*16 + i];
 		const int3 point0 = (int3)(cubePosition.x + offsets3[edge*6], cubePosition.y + offsets3[edge*6+1], cubePosition.z + offsets3[edge*6+2]);
 		const int3 point1 = (int3)(cubePosition.x + offsets3[edge*6+3], cubePosition.y + offsets3[edge*6+4], cubePosition.z + offsets3[edge*6+5]);
