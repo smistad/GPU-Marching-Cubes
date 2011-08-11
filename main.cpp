@@ -24,8 +24,8 @@ int main(int argc, char ** argv) {
             cout << "File '" << filename << "' not found!" << endl;
             return EXIT_FAILURE;
         }
-        int size = prepareDataset(voxels, sizeX/stepSizeX, sizeY/stepSizeY, sizeZ/stepSizeZ);
-        setupOpenGL(&argc,argv);
+        int size = prepareDataset(&voxels, sizeX/stepSizeX, sizeY/stepSizeY, sizeZ/stepSizeZ);
+        setupOpenGL(&argc,argv,size,sizeX,sizeY,sizeZ);
         setupOpenCL(voxels, size);
         run();
     } else {

@@ -8,7 +8,6 @@ Program program;
 CommandQueue queue;
 Context context;
 
-Size VOLUME_SIZE = {256,256,256};
 int SIZE;
 int isolevel = 50;
 int windowWidth, windowHeight;
@@ -180,7 +179,7 @@ void run() {
     glutMainLoop();
 }
 
-void setupOpenGL(int * argc, char ** argv) {
+void setupOpenGL(int * argc, char ** argv, int size, int sizeX, int sizeY, int sizeZ) {
     /* Initialize GLUT */
     glutInit(argc, argv);
     glutInitDisplayMode(GLUT_DEPTH | GLUT_DOUBLE | GLUT_RGBA);
@@ -227,13 +226,13 @@ void setupOpenGL(int * argc, char ** argv) {
 	region[0] = 2;
 	region[1] = 2;
 	region[2] = 2;
-    scalingFactor.x = 1.5f/(VOLUME_SIZE.x);
-    scalingFactor.y = 1.5f/(VOLUME_SIZE.y);
-    scalingFactor.z = 1.5f/(VOLUME_SIZE.z);
+    scalingFactor.x = 1.5f/size;
+    scalingFactor.y = 1.5f/size;
+    scalingFactor.z = 1.5f/size;
     
-    translation.x = (float)VOLUME_SIZE.x/2.0f;
-    translation.y = -(float)VOLUME_SIZE.x/2.0f;
-    translation.z = -(float)VOLUME_SIZE.x/2.0f;
+    translation.x = (float)sizeX/2.0f;
+    translation.y = -(float)sizeY/2.0f;
+    translation.z = -(float)sizeZ/2.0f;
 	if(glewIsExtensionSupported("ARB_cl_event")) {
 		std::cout << "weeee! cl_event supported" << std::endl;
 	}
@@ -271,7 +270,7 @@ int max(int a, int b) {
     return a > b ? a:b;
 }
 
-int prepareDataset(uchar * voxels, int sizeX, int sizeY, int sizeZ) {
+int prepareDataset(uchar ** voxels, int sizeX, int sizeY, int sizeZ) {
     // If all equal and power of two exit
     if(sizeX == sizeY && sizeY == sizeZ && sizeX == pow(2, log2(sizeX)))
         return sizeX;
@@ -279,8 +278,8 @@ int prepareDataset(uchar * voxels, int sizeX, int sizeY, int sizeZ) {
     // Find largest size and find closest power of two
     int largestSize = max(sizeX, max(sizeY, sizeZ));
     int size = 0;
-    int i = 0;
-    while(pow(2, i) >= largestSize)
+    int i = 1;
+    while(pow(2, i) < largestSize)
         i++;
     size = pow(2, i);
 
@@ -293,13 +292,12 @@ int prepareDataset(uchar * voxels, int sizeX, int sizeY, int sizeZ) {
     for(int x = 0; x < sizeX; x++) {
         for(int y = 0; y < sizeY; y++) {
             for(int z = 0; z <sizeZ; z++) {
-                newVoxels[x + y*size + z*size*size] = voxels[x + y*sizeX + z*sizeX*sizeY];
+                newVoxels[x + y*size + z*size*size] = voxels[0][x + y*sizeX + z*sizeX*sizeY];
             }
         }
     }
-    delete[] voxels;
-    voxels = newVoxels;
-
+    delete[] voxels[0];
+    voxels[0] = newVoxels;
     return size;
 }
 
@@ -370,6 +368,7 @@ void setupOpenCL(uchar * voxels, int size) {
                 SIZE, SIZE, SIZE,
                 0, 0, voxels
         );
+        std::cout << "asdasddddd" << std::endl;
         delete[] voxels;
 
 		// Make kernels
@@ -401,7 +400,7 @@ void histoPyramidConstruction() {
 
         int previous = SIZE / 2;
         // Run level 2 to top level
-        for(int i = 1; i < log((float)VOLUME_SIZE.z)/log(2.0f)-1; i++) {
+        for(int i = 1; i < log2((float)SIZE)-1; i++) {
 			constructHPLevelKernel.setArg(0, images[i]);
 			constructHPLevelKernel.setArg(1, images[i+1]);
 			previous /= 2;

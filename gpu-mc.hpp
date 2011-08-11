@@ -20,7 +20,7 @@ using namespace cl;
 typedef unsigned int uint;
 typedef unsigned char uchar;
 
-void setupOpenGL(int *, char **);
+void setupOpenGL(int *, char **, int, int, int, int);
 void setupOpenCL(unsigned char * voxels, int size);
 void run();
 void renderScene();
@@ -29,7 +29,7 @@ void reshape(int width, int height);
 void keyboard(unsigned char key, int x, int y);
 void mouseMovement(int x, int y);
 
-int prepareDataset(uchar * voxels, int sizeX, int sizeY, int sizeZ);
+int prepareDataset(uchar ** voxels, int sizeX, int sizeY, int sizeZ);
 
 void updateScalarField();
 void histoPyramidConstruction();
