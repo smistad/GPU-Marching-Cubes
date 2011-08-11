@@ -50,14 +50,14 @@ void renderBitmapString(float x, float y, float z, void *font, char *string) {
 
 int frame = 0;
 int timebase = 0;
-char s[60];
+char s[80];
 int previousTime = 0;
 void drawFPSCounter(int sum) {
 	frame++;
 
     int time = glutGet(GLUT_ELAPSED_TIME);
 	if (time - timebase > 1000) { // 1 times per second
-		sprintf(s,"Marching Cubes - Triangles: %d FPS: %4.2f Speed: %d ms", sum, frame*1000.0/(time-timebase), time - previousTime);
+		sprintf(s,"Marching Cubes - Triangles: %d FPS: %4.2f Speed: %d ms", sum, frame*1000.0/(time-timebase), (int)round(time - previousTime));
 		timebase = time;
 		frame = 0;
 	}
@@ -233,9 +233,6 @@ void setupOpenGL(int * argc, char ** argv, int size, int sizeX, int sizeY, int s
     translation.x = (float)sizeX/2.0f;
     translation.y = -(float)sizeY/2.0f;
     translation.z = -(float)sizeZ/2.0f;
-	if(glewIsExtensionSupported("ARB_cl_event")) {
-		std::cout << "weeee! cl_event supported" << std::endl;
-	}
 }
 
 void keyboard(unsigned char key, int x, int y) {
