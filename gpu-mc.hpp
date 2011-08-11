@@ -21,7 +21,7 @@ typedef unsigned int uint;
 typedef unsigned char uchar;
 
 void setupOpenGL(int *, char **);
-void setupOpenCL(unsigned char * voxels, int sizeX, int sizeY, int sizeZ);
+void setupOpenCL(unsigned char * voxels, int size);
 void run();
 void renderScene();
 void idle();

@@ -26,7 +26,7 @@ int main(int argc, char ** argv) {
         }
         int size = prepareDataset(voxels, sizeX/stepSizeX, sizeY/stepSizeY, sizeZ/stepSizeZ);
         setupOpenGL(&argc,argv);
-        setupOpenCL(voxels, sizeX/stepSizeX, sizeY/stepSizeY, sizeZ/stepSizeZ);
+        setupOpenCL(voxels, size);
         run();
     } else {
         cout << "usage: filename.raw sizeX sizeY sizeZ [stepSizeX stepSizeY stepSizeZ]" << endl;

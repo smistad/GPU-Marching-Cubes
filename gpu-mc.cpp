@@ -9,6 +9,7 @@ CommandQueue queue;
 Context context;
 
 Size VOLUME_SIZE = {256,256,256};
+int SIZE;
 int isolevel = 50;
 int windowWidth, windowHeight;
 
@@ -303,11 +304,8 @@ int prepareDataset(uchar * voxels, int sizeX, int sizeY, int sizeZ) {
 }
 
 
-void setupOpenCL(uchar * voxels, int sizeX, int sizeY, int sizeZ) {
-    
-    VOLUME_SIZE.x = sizeX;
-    VOLUME_SIZE.y = sizeY;
-    VOLUME_SIZE.z = sizeZ;
+void setupOpenCL(uchar * voxels, int size) {
+    SIZE = size; 
    try { 
         // Create a context that use a GPU and OpenGL interop.
 		context = createCLContext(CL_DEVICE_TYPE_GPU, true);
@@ -344,7 +342,7 @@ void setupOpenCL(uchar * voxels, int sizeX, int sizeY, int sizeZ) {
 
         // Create memory buffers
 		ImageFormat imageFormat = ImageFormat(CL_R, CL_UNSIGNED_INT32);
-        int bufferSize = VOLUME_SIZE.z;
+        int bufferSize = SIZE;
 		// Make the two first buffers use INT8
 		images.push_back(Image3D(context, CL_MEM_READ_WRITE, ImageFormat(CL_RGBA, CL_UNSIGNED_INT8), bufferSize, bufferSize, bufferSize));
 		bufferSize /= 2;
@@ -357,7 +355,7 @@ void setupOpenCL(uchar * voxels, int sizeX, int sizeY, int sizeZ) {
 		bufferSize /= 2;
 		images.push_back(Image3D(context, CL_MEM_READ_WRITE, ImageFormat(CL_R, CL_UNSIGNED_INT16), bufferSize, bufferSize, bufferSize));
 		bufferSize /= 2;
-        for(int i = 5; i < (log2((float)VOLUME_SIZE.z )); i ++) {
+        for(int i = 5; i < (log2((float)SIZE)); i ++) {
 			if(bufferSize == 1)
 				bufferSize = 2; // Image cant be 1x1x1
 			images.push_back(Image3D(context, CL_MEM_READ_WRITE, imageFormat, bufferSize, bufferSize, bufferSize));
@@ -369,7 +367,7 @@ void setupOpenCL(uchar * voxels, int sizeX, int sizeY, int sizeZ) {
                 context, 
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, 
                 ImageFormat(CL_R, CL_UNSIGNED_INT8), 
-                VOLUME_SIZE.x, VOLUME_SIZE.y, VOLUME_SIZE.z,
+                SIZE, SIZE, SIZE,
                 0, 0, voxels
         );
         delete[] voxels;
@@ -397,25 +395,22 @@ void histoPyramidConstruction() {
         queue.enqueueNDRangeKernel(
 			constructHPLevelKernel, 
 			NullRange, 
-			NDRange(VOLUME_SIZE.x/2, VOLUME_SIZE.y/2, VOLUME_SIZE.z/2), 
+			NDRange(SIZE/2, SIZE/2, SIZE/2), 
 			NullRange
 		);
 
-		Size previous = {VOLUME_SIZE.x/2, VOLUME_SIZE.y/2, VOLUME_SIZE.z/2};
-
+        int previous = SIZE / 2;
         // Run level 2 to top level
         for(int i = 1; i < log((float)VOLUME_SIZE.z)/log(2.0f)-1; i++) {
 			constructHPLevelKernel.setArg(0, images[i]);
 			constructHPLevelKernel.setArg(1, images[i+1]);
+			previous /= 2;
             queue.enqueueNDRangeKernel(
 				constructHPLevelKernel, 
 				NullRange, 
-				NDRange(previous.x/2, previous.y/2, previous.z/2), 
+				NDRange(previous, previous, previous), 
                 NullRange
 			);
-			previous.x /= 2;
-			previous.y /= 2;
-			previous.z /= 2;
         }
 }
 
@@ -426,7 +421,7 @@ void updateScalarField() {
     queue.enqueueNDRangeKernel(
             classifyCubesKernel, 
             NullRange, 
-            NDRange(VOLUME_SIZE.x, VOLUME_SIZE.y, VOLUME_SIZE.z), 
+            NDRange(SIZE, SIZE, SIZE),
             NullRange
     );
 }
