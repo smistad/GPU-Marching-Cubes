@@ -115,17 +115,16 @@ void renderScene() {
 	//glRotatef(270.0f, 1.0f, 0.0f, 0.0f);	
 	drawFPSCounter(totalSum);
 
-
 	glTranslatef(-camX, -camY, -camZ);
 
 	glRotatef(xrot,1.0,0.0,0.0);
 	glRotatef(yrot,0.0, 1.0, 0.0);
 
-
     // Draw axis
     glPushMatrix();
     glBegin(GL_LINES);
         glColor3f(1.0f, 0.0f, 0.0f);
+
         glVertex3f(0.0f, 0.0f, 0.0f);
         glVertex3f(0.0f, 2.0f, 0.0f);
 
@@ -134,11 +133,6 @@ void renderScene() {
 
         glVertex3f(0.0f, 0.0f, 0.0f);
         glVertex3f(0.0f, 0.0f, 2.0f);
-
-
-        //glScalef(100.f, 100.0f, 100.0f);
-        //glVertex3f(0.0f, 0.0f, 0.0f);
-        //glVertex3f(0.0f, cos(xrot/ 180 * 3.141592654f),-sin(xrot/ 180 * 3.141592654f));
     glEnd();
     glPopMatrix();
 
@@ -335,8 +329,7 @@ void setupOpenCL(uchar * voxels, int size) {
             throw error;
         } 
 
-        // Create memory buffers
-		ImageFormat imageFormat = ImageFormat(CL_R, CL_UNSIGNED_INT32);
+        // Create images for the HistogramPyramid
         int bufferSize = SIZE;
 		// Make the two first buffers use INT8
 		images.push_back(Image3D(context, CL_MEM_READ_WRITE, ImageFormat(CL_RGBA, CL_UNSIGNED_INT8), bufferSize, bufferSize, bufferSize));
@@ -350,10 +343,11 @@ void setupOpenCL(uchar * voxels, int size) {
 		bufferSize /= 2;
 		images.push_back(Image3D(context, CL_MEM_READ_WRITE, ImageFormat(CL_R, CL_UNSIGNED_INT16), bufferSize, bufferSize, bufferSize));
 		bufferSize /= 2;
+        // The rest will use INT32
         for(int i = 5; i < (log2((float)SIZE)); i ++) {
 			if(bufferSize == 1)
 				bufferSize = 2; // Image cant be 1x1x1
-			images.push_back(Image3D(context, CL_MEM_READ_WRITE, imageFormat, bufferSize, bufferSize, bufferSize));
+			images.push_back(Image3D(context, CL_MEM_READ_WRITE, ImageFormat(CL_R, CL_UNSIGNED_INT32), bufferSize, bufferSize, bufferSize));
             bufferSize /= 2;
         }
 
@@ -365,7 +359,6 @@ void setupOpenCL(uchar * voxels, int size) {
                 SIZE, SIZE, SIZE,
                 0, 0, voxels
         );
-        std::cout << "asdasddddd" << std::endl;
         delete[] voxels;
 
 		// Make kernels
