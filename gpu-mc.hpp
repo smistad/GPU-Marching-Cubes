@@ -17,6 +17,9 @@
 
 using namespace cl;
 
+typedef unsigned int uint;
+typedef unsigned char uchar;
+
 void setupOpenGL(int *, char **);
 void setupOpenCL(unsigned char * voxels, int sizeX, int sizeY, int sizeZ);
 void run();
@@ -26,14 +29,14 @@ void reshape(int width, int height);
 void keyboard(unsigned char key, int x, int y);
 void mouseMovement(int x, int y);
 
+int prepareDataset(uchar * voxels, int sizeX, int sizeY, int sizeZ);
+
 void updateScalarField();
 void histoPyramidConstruction();
 void histoPyramidTraversal(int sum);
 
 char * getCLErrorString(cl_int error);
 
-typedef unsigned int uint;
-typedef unsigned char uchar;
 
 typedef struct {
     int x,y,z;

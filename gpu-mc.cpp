@@ -266,6 +266,43 @@ void keyboard(unsigned char key, int x, int y) {
 	}
 }
 
+int max(int a, int b) {
+    return a > b ? a:b;
+}
+
+int prepareDataset(uchar * voxels, int sizeX, int sizeY, int sizeZ) {
+    // If all equal and power of two exit
+    if(sizeX == sizeY && sizeY == sizeZ && sizeX == pow(2, log2(sizeX)))
+        return sizeX;
+
+    // Find largest size and find closest power of two
+    int largestSize = max(sizeX, max(sizeY, sizeZ));
+    int size = 0;
+    int i = 0;
+    while(pow(2, i) >= largestSize)
+        i++;
+    size = pow(2, i);
+
+    // Make new voxel array of this size and fill it with zeros
+    uchar * newVoxels = new uchar[size*size*size];
+    for(int j = 0; j < size*size*size; j++) 
+        newVoxels[j] = 0;
+
+    // Fill the voxel array with previous data
+    for(int x = 0; x < sizeX; x++) {
+        for(int y = 0; y < sizeY; y++) {
+            for(int z = 0; z <sizeZ; z++) {
+                newVoxels[x + y*size + z*size*size] = voxels[x + y*sizeX + z*sizeX*sizeY];
+            }
+        }
+    }
+    delete[] voxels;
+    voxels = newVoxels;
+
+    return size;
+}
+
+
 void setupOpenCL(uchar * voxels, int sizeX, int sizeY, int sizeZ) {
     
     VOLUME_SIZE.x = sizeX;
@@ -301,7 +338,6 @@ void setupOpenCL(uchar * voxels, int sizeX, int sizeY, int sizeZ) {
         } catch(Error error) {
             if(error.err() == CL_BUILD_PROGRAM_FAILURE) {
                 std::cout << "Build log:\t" << program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(devices[0]) << std::endl;
-				system("pause");
             }   
             throw error;
         } 

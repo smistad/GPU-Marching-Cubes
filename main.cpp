@@ -21,8 +21,10 @@ int main(int argc, char ** argv) {
         }
         unsigned char * voxels = readRawFile(filename, sizeX, sizeY, sizeZ, stepSizeX, stepSizeY, stepSizeZ);
         if(voxels == NULL) {
-            cout << "File '" << filename << "' not found!" << endl;             return EXIT_FAILURE;
+            cout << "File '" << filename << "' not found!" << endl;
+            return EXIT_FAILURE;
         }
+        int size = prepareDataset(voxels, sizeX/stepSizeX, sizeY/stepSizeY, sizeZ/stepSizeZ);
         setupOpenGL(&argc,argv);
         setupOpenCL(voxels, sizeX/stepSizeX, sizeY/stepSizeY, sizeZ/stepSizeZ);
         run();
