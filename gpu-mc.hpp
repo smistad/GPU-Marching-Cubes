@@ -13,14 +13,6 @@
 #include <CL/cl.hpp>
 #include <CL/cl_gl_ext.h>
 #include <GL/glut.h>
-
-#if defined __APPLE__ || defined(MACOSX)
-#else
-    #if defined WIN32
-    #else
-        #include <GL/glx.h>
-    #endif
-#endif
 #include <math.h>
 
 using namespace cl;
@@ -37,9 +29,6 @@ void mouseMovement(int x, int y);
 void updateScalarField();
 void histoPyramidConstruction();
 void histoPyramidTraversal(int sum);
-
-void parseRawFile(char * filename);
-
 
 char * getCLErrorString(cl_int error);
 

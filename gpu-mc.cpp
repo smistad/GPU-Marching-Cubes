@@ -270,23 +270,8 @@ void setupOpenCL(uchar * voxels, int sizeX, int sizeY, int sizeZ) {
     VOLUME_SIZE.y = sizeY;
     VOLUME_SIZE.z = sizeZ;
    try { 
-        // Get available platforms
-        vector<Platform> platforms;
-        Platform::get(&platforms);
-
-        // Select the default platform and create a context using this platform and the GPU
-        cl_context_properties cps[7] = { 
-			#ifdef WIN32
-			CL_GL_CONTEXT_KHR, (cl_context_properties)wglGetCurrentContext(),
-			CL_WGL_HDC_KHR, (cl_context_properties)wglGetCurrentDC(),
-			#else
-            CL_GL_CONTEXT_KHR, (cl_context_properties)glXGetCurrentContext(),
-            CL_GLX_DISPLAY_KHR, (cl_context_properties)glXGetCurrentDisplay(),
-			#endif
-            CL_CONTEXT_PLATFORM, (cl_context_properties)(platforms[0])(), 
-            0 
-        };
-		context = Context( CL_DEVICE_TYPE_GPU, cps);
+        // Create a context that use a GPU and OpenGL interop.
+		context = createCLContext(CL_DEVICE_TYPE_GPU, true);
 
         // Get a list of devices on this platform
 		vector<Device> devices = context.getInfo<CL_CONTEXT_DEVICES>();
@@ -443,44 +428,3 @@ void histoPyramidTraversal(int sum) {
 //	traversalSync = glCreateSyncFromCLeventARB((cl_context)context(), (cl_event)traversalEvent(), 0); // Need the GL_ARB_cl_event extension
     queue.flush();
 }
-
-void parseRawFile(char * filename) {
-    // Parse the specified raw file and transfer it to the device
-    int rawDataSize = VOLUME_SIZE.x*VOLUME_SIZE.y*VOLUME_SIZE.z;   
-
-    uchar * rawVoxels = new uchar[rawDataSize];
-	uchar * voxels = new uchar[rawDataSize / ( STEP_SIZE.x*STEP_SIZE.y*STEP_SIZE.z)];
-    FILE * file = fopen(filename, "rb");
-    if(file == NULL) {
-        printf("File not found: %s\n", filename);
-        exit(-1);
-    }
-
-    fread(rawVoxels, sizeof(uchar), rawDataSize, file);
-	if(STEP_SIZE.x == 1 && STEP_SIZE.y == 1 && STEP_SIZE.z == 1) {
-		voxels = rawVoxels;
-		rawData = Image3D(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, 
-			ImageFormat(CL_R, CL_UNSIGNED_INT8), VOLUME_SIZE.x, VOLUME_SIZE.y, VOLUME_SIZE.z, 
-			0, 0, voxels);
-		delete voxels;
-	} else {
-		int i = 0;
-		for(int z = 0; z < VOLUME_SIZE.z; z += STEP_SIZE.z) {
-			for(int y = 0; y < VOLUME_SIZE.y; y += STEP_SIZE.y) {
-				for(int x = 0; x < VOLUME_SIZE.x; x += STEP_SIZE.x) {
-					voxels[i] = rawVoxels[x + y*VOLUME_SIZE.x + z*VOLUME_SIZE.x*VOLUME_SIZE.y];
-					i++;
-				}
-			}
-		}
-		//FILE * file2 = fopen("vertebra8_64.raw", "wb");
-		//fwrite(voxels, sizeof(uchar), rawDataSize / ( STEP_SIZE.x*STEP_SIZE.y*STEP_SIZE.z), file2);
-		rawData = Image3D(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, 
-			ImageFormat(CL_R, CL_UNSIGNED_INT8), VOLUME_SIZE.x/STEP_SIZE.x, VOLUME_SIZE.y/STEP_SIZE.y, VOLUME_SIZE.z/STEP_SIZE.z, 
-			0,0, voxels);
-		delete rawVoxels;
-		delete voxels;
-	}
-}
-
-

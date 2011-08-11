@@ -1,27 +1,55 @@
 #include "openCLUtilities.hpp"
 
+#if defined __APPLE__ || defined(MACOSX)
+#else
+    #if defined WIN32
+    #else
+        #include <GL/glx.h>
+    #endif
+#endif
 
 cl::Context createCLContext(cl_device_type type, bool GLInterop, cl_vendor vendor) {
-        // Get available platforms
-        cl::vector<cl::Platform> platforms;
-        cl::Platform::get(&platforms);
+    // Get available platforms
+    cl::vector<cl::Platform> platforms;
+    cl::Platform::get(&platforms);
 
-        // TODO: create vendor selecting mechanism
+    // TODO: create vendor selecting mechanism
 
-        if(platforms.size() == 0)
-            throw cl::Error(1, "No OpenCL platforms were found");
+    if(platforms.size() == 0)
+        throw cl::Error(1, "No OpenCL platforms were found");
 
-        cl::Platform platform = platforms[0];
+    cl::Platform platform = platforms[0];
 
-        // Use the preferred platform and create a context
-        cl_context_properties cps[] = { 
-            CL_CONTEXT_PLATFORM, (cl_context_properties)(platform)(), 
-            0 
-        };
-        if(GLInterop) {
-        } else {
-        }
-        try {
+    // Use the preferred platform and create a context
+    cl_context_properties * cps;
+    if(GLInterop) {
+        #ifdef __APPLE || defined(MACOSX)
+        cps = new cl_context_properties[5];
+        //TODO: Apple OpenGL interop
+        #else
+        cps = new cl_context_properties[7];
+        #ifdef WIN32
+        cps[0] = CL_GL_CONTEXT_KHR; 
+        cps[1] = (cl_context_properties)wglGetCurrentContext();
+        cps[2] = CL_WGL_HDC_KHR;
+        cps[3] = (cl_context_properties)wglGetCurrentDC();
+        #else
+        cps[0] = CL_GL_CONTEXT_KHR; 
+        cps[1] = (cl_context_properties)glXGetCurrentContext();
+        cps[2] = CL_GLX_DISPLAY_KHR;
+        cps[3] = (cl_context_properties)glXGetCurrentDisplay();
+        #endif
+        #endif // end if apple
+        cps[4] = CL_CONTEXT_PLATFORM;
+        cps[5] = (cl_context_properties)(platform)();
+        cps[6] = 0;
+    } else {
+        cps = new cl_context_properties[3];
+        cps[0] = CL_CONTEXT_PLATFORM;
+        cps[1] = (cl_context_properties)(platform)();
+        cps[2] = 0;
+    }
+    try {
         cl::Context context = cl::Context(type, cps);
 
         return context;
