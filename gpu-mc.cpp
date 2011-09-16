@@ -1,5 +1,4 @@
 #include "gpu-mc.hpp"
-#include "openCLUtilities.hpp"
 
 // Define some globals
 GLuint VBO_ID = 0;
@@ -121,6 +120,7 @@ void renderScene() {
 	glRotatef(yrot,0.0, 1.0, 0.0);
 
     // Draw axis
+    /*
     glPushMatrix();
     glBegin(GL_LINES);
         glColor3f(1.0f, 0.0f, 0.0f);
@@ -135,7 +135,7 @@ void renderScene() {
         glVertex3f(0.0f, 0.0f, 2.0f);
     glEnd();
     glPopMatrix();
-
+    */
 
     glPushMatrix();
     glColor3f(1.0f, 1.0f, 1.0f);
@@ -305,7 +305,7 @@ void setupOpenCL(uchar * voxels, int size) {
     SIZE = size; 
    try { 
         // Create a context that use a GPU and OpenGL interop.
-		context = createCLContext(CL_DEVICE_TYPE_GPU, true);
+		context = createCLGLContext(CL_DEVICE_TYPE_GPU, VENDOR_ANY);
 
         // Get a list of devices on this platform
 		vector<Device> devices = context.getInfo<CL_CONTEXT_DEVICES>();

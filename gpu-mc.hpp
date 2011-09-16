@@ -1,18 +1,17 @@
 #ifndef HPMC_H
 #define HPMC_H
 
-#define GL_SHARING_EXTENSION "cl_khr_gl_sharing"
 #define __NO_STD_VECTOR // Use cl::vector instead of STL version
 #define __CL_ENABLE_EXCEPTIONS
+#define __USE_GL_INTEROP
 
 #include <iostream>
 #include <fstream>
 #include <utility>
 #include <string>
 #include <GL/glew.h>
-#include <CL/cl.hpp>
-#include <CL/cl_gl_ext.h>
 #include <GL/glut.h>
+#include "openCLGLUtilities.hpp"
 #include <math.h>
 
 using namespace cl;
