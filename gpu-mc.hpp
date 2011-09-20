@@ -19,7 +19,7 @@ using namespace cl;
 typedef unsigned int uint;
 typedef unsigned char uchar;
 
-void setupOpenGL(int *, char **, int, int, int, int);
+void setupOpenGL(int * argc, char ** argv, int size, int sizeX, int sizeY, int sizeZ, float spacingX, float spacingY, float spacingZ); 
 void setupOpenCL(unsigned char * voxels, int size);
 void run();
 void renderScene();

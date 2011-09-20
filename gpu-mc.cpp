@@ -173,7 +173,7 @@ void run() {
     glutMainLoop();
 }
 
-void setupOpenGL(int * argc, char ** argv, int size, int sizeX, int sizeY, int sizeZ) {
+void setupOpenGL(int * argc, char ** argv, int size, int sizeX, int sizeY, int sizeZ, float spacingX, float spacingY, float spacingZ) {
     /* Initialize GLUT */
     glutInit(argc, argv);
     glutInitDisplayMode(GLUT_DEPTH | GLUT_DOUBLE);
@@ -220,9 +220,9 @@ void setupOpenGL(int * argc, char ** argv, int size, int sizeX, int sizeY, int s
 	region[0] = 2;
 	region[1] = 2;
 	region[2] = 2;
-    scalingFactor.x = 1.5f/size;
-    scalingFactor.y = 1.5f/size;
-    scalingFactor.z = 1.5f/size;
+    scalingFactor.x = spacingX*1.5f/size;
+    scalingFactor.y = spacingY*1.5f/size;
+    scalingFactor.z = spacingZ*1.5f/size;
     
     translation.x = (float)sizeX/2.0f;
     translation.y = -(float)sizeY/2.0f;
@@ -430,7 +430,7 @@ void updateScalarField() {
 BufferGL VBOBuffer;
 void histoPyramidTraversal(int sum) {
     // Make OpenCL buffer from OpenGL buffer
-	int i = 0;
+	unsigned int i = 0;
 	for(i = 0; i < images.size(); i++) {
 		traverseHPKernel.setArg(i, images[i]);
 	}
