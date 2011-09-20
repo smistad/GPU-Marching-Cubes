@@ -6,10 +6,11 @@ Notes about implementation
 ----------------------------
 * Example 3D RAW files can be downloaded from www.volvis.org
 * Currently only supports 8 bit raw files, but should be easily extended to other types
+* Currently does not work on NVIDIA GPUs due to their lack of 3D texture write support
 * See LICENCE file for license information
 
 Usage
 ----------------------------
 Run the program with the following arguments:
 
-filename.raw sizeX sizeY sizeZ [stepSizeX stepSizeY stepSizeZ]
+filename.raw sizeX sizeY sizeZ [stepSizeX stepSizeY stepSizeZ] [spacingX spacingY spacingZ]
