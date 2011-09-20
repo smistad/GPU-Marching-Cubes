@@ -25,7 +25,7 @@ int main(int argc, char ** argv) {
             return EXIT_FAILURE;
         }
         int size = prepareDataset(&voxels, sizeX/stepSizeX, sizeY/stepSizeY, sizeZ/stepSizeZ);
-        setupOpenGL(&argc,argv,size,sizeX,sizeY,sizeZ);
+        setupOpenGL(&argc,argv,size,sizeX/stepSizeX,sizeY/stepSizeY,sizeZ/stepSizeZ);
         setupOpenCL(voxels, size);
         run();
     } else {
