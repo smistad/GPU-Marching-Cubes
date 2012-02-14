@@ -12,15 +12,16 @@ unsigned char * readRawFile(char * filename, int sizeX, int sizeY, int sizeZ, in
 	if(stepSizeX == 1 && stepSizeY == 1 && stepSizeZ == 1) 
         return rawVoxels;
 
-	    unsigned char * voxels = new unsigned char[rawDataSize / ( stepSizeX*stepSizeY*stepSizeZ)];
-		int i = 0;
-		for(int z = 0; z < sizeZ; z += stepSizeZ) {
-			for(int y = 0; y < sizeY; y += stepSizeY) {
-				for(int x = 0; x < sizeX; x += stepSizeX) {
-					voxels[i] = rawVoxels[x + y*sizeX + z*sizeX*sizeY];
-					i++;
-				}
-			}
-		}
-        return voxels;
+    unsigned char * voxels = new unsigned char[rawDataSize / ( stepSizeX*stepSizeY*stepSizeZ)];
+    int i = 0;
+    for(int z = 0; z < sizeZ; z += stepSizeZ) {
+        for(int y = 0; y < sizeY; y += stepSizeY) {
+            for(int x = 0; x < sizeX; x += stepSizeX) {
+                voxels[i] = rawVoxels[x + y*sizeX + z*sizeX*sizeY];
+                i++;
+            }
+        }
+    }
+    free(rawVoxels);
+    return voxels;
 }
