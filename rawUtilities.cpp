@@ -22,6 +22,6 @@ unsigned char * readRawFile(char * filename, int sizeX, int sizeY, int sizeZ, in
             }
         }
     }
-    free(rawVoxels);
+    delete rawVoxels;
     return voxels;
 }
