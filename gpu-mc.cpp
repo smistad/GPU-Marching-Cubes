@@ -6,6 +6,7 @@ GLfloat angle = 0.0f;
 Program program;
 CommandQueue queue;
 Context context;
+bool writingTo3DTextures;
 
 int SIZE;
 int isolevel = 50;
@@ -312,6 +313,14 @@ void setupOpenCL(uchar * voxels, int size) {
 
         // Create a command queue and use the first device
         queue = CommandQueue(context, devices[0]);
+
+        // Check if writing to 3D textures are supported
+        if((int)devices[0].getInfo<CL_DEVICE_EXTENSIONS>().find("cl_khr_3d_image_writes") > -1) {
+            writingTo3DTextures = true;
+        } else {
+            std::cout << "Writing to 3D textures is not supported on this device. Writing to regular buffers instead." << std::endl;
+            writingTo3DTextures = false;
+        }
 
         // Read source file
         std::ifstream sourceFile("gpu-mc.cl");
