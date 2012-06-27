@@ -316,15 +316,18 @@ void setupOpenCL(uchar * voxels, int size) {
         queue = CommandQueue(context, devices[0]);
 
         // Check if writing to 3D textures are supported
+        std::string sourceFilename;
         if((int)devices[0].getInfo<CL_DEVICE_EXTENSIONS>().find("cl_khr_3d_image_writes") > -1) {
             writingTo3DTextures = true;
+            sourceFilename = "gpu-mc.cl";
         } else {
             std::cout << "Writing to 3D textures is not supported on this device. Writing to regular buffers instead." << std::endl;
             writingTo3DTextures = false;
+            sourceFilename = "gpu-mc-no-3d-write.cl";
         }
 
         // Read source file
-        std::ifstream sourceFile("gpu-mc.cl");
+        std::ifstream sourceFile(sourceFilename.c_str());
         if(sourceFile.fail()) {
             std::cout << "Failed to open OpenCL source file" << std::endl;
             exit(-1);
@@ -376,7 +379,7 @@ void setupOpenCL(uchar * voxels, int size) {
         // If writing to 3D textures is not supported we to create buffers to write to aswell
         if(!writingTo3DTextures) {
             bufferSize = SIZE*SIZE*SIZE;
-            buffers.push_back(Buffer(context, CL_MEM_WRITE_ONLY, sizeof(char)*bufferSize));
+            buffers.push_back(Buffer(context, CL_MEM_WRITE_ONLY, 4*sizeof(char)*bufferSize));
             bufferSize /= 8;
             buffers.push_back(Buffer(context, CL_MEM_WRITE_ONLY, sizeof(char)*bufferSize));
             bufferSize /= 8;
@@ -445,15 +448,39 @@ void histoPyramidConstruction() {
 }
 
 void updateScalarField() {
-    classifyCubesKernel.setArg(0, images[0]);
-    classifyCubesKernel.setArg(1, rawData);
-	classifyCubesKernel.setArg(2, isolevel);
-    queue.enqueueNDRangeKernel(
-            classifyCubesKernel, 
-            NullRange, 
-            NDRange(SIZE, SIZE, SIZE),
-            NullRange
-    );
+    if(writingTo3DTextures) {
+        classifyCubesKernel.setArg(0, images[0]);
+        classifyCubesKernel.setArg(1, rawData);
+        classifyCubesKernel.setArg(2, isolevel);
+        queue.enqueueNDRangeKernel(
+                classifyCubesKernel, 
+                NullRange, 
+                NDRange(SIZE, SIZE, SIZE),
+                NullRange
+        );
+    } else {
+        classifyCubesKernel.setArg(0, buffers[0]);
+        classifyCubesKernel.setArg(1, rawData);
+        classifyCubesKernel.setArg(2, isolevel);
+        queue.enqueueNDRangeKernel(
+                classifyCubesKernel, 
+                NullRange, 
+                NDRange(SIZE, SIZE, SIZE),
+                NullRange
+        );
+
+        cl::size_t<3> offset;
+        offset[0] = 0;
+        offset[1] = 0;
+        offset[2] = 0;
+        cl::size_t<3> region;
+        region[0] = SIZE;
+        region[1] = SIZE;
+        region[2] = SIZE;
+
+        // Copy buffer to image
+        queue.enqueueCopyBufferToImage(buffers[0], images[0], 0, offset, region);
+    }
 }
 
 BufferGL VBOBuffer;
