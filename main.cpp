@@ -3,6 +3,7 @@
 #include <iostream>
 using namespace std;
 
+#define GLX_DIRECT_RENDERING 1
 int main(int argc, char ** argv) {
 
     // Process arguments

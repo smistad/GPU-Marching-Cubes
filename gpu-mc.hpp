@@ -11,7 +11,7 @@
 #include <string>
 #include <GL/glew.h>
 #include <GL/glut.h>
-#include "openCLGLUtilities.hpp"
+#include "OpenCLUtilities/openCLGLUtilities.hpp"
 #include <math.h>
 
 using namespace cl;

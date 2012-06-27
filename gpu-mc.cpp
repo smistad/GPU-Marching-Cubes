@@ -180,7 +180,7 @@ void setupOpenGL(int * argc, char ** argv, int size, int sizeX, int sizeY, int s
     glutInitWindowPosition(0, 0);
     glutInitWindowSize(glutGet(GLUT_SCREEN_WIDTH),glutGet(GLUT_SCREEN_HEIGHT));
     glutCreateWindow("GPU Marching Cubes");
-    glutFullScreen();	
+    //glutFullScreen();	
     glutDisplayFunc(renderScene);
     glutIdleFunc(idle);
     glutReshapeFunc(reshape);
