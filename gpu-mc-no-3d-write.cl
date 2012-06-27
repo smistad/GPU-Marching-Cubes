@@ -16,12 +16,12 @@ __constant int4 cubeOffsets[8] = {
 
 __kernel void constructHPLevel(
 		__read_only image3d_t readHistoPyramid, 
-		__write_only image3d_t writeHistoPyramid
+		__global uint * writeHistoPyramid
 	) {	
 
 	int4 writePos = {get_global_id(0), get_global_id(1), get_global_id(2), 0};
 	int4 readPos = writePos*2;
-	int writeValue = read_imagei(readHistoPyramid, sampler, readPos).x + // 0
+	uint writeValue = read_imagei(readHistoPyramid, sampler, readPos).x + // 0
 		read_imagei(readHistoPyramid, sampler, readPos+cubeOffsets[1]).x + // 1
 		read_imagei(readHistoPyramid, sampler, readPos+cubeOffsets[2]).x + // 2
 		read_imagei(readHistoPyramid, sampler, readPos+cubeOffsets[3]).x + // 3
@@ -30,8 +30,47 @@ __kernel void constructHPLevel(
 		read_imagei(readHistoPyramid, sampler, readPos+cubeOffsets[6]).x + // 6
 		read_imagei(readHistoPyramid, sampler, readPos+cubeOffsets[7]).x; // 7
 
-	write_imagei(writeHistoPyramid, writePos, writeValue);
+    writeHistoPyramid[writePos.x+writePos.y*get_global_size(0)+writePos.z*get_global_size(0)*get_global_size(0)] = writeValue;
 }
+
+__kernel void constructHPLevelChar(
+		__read_only image3d_t readHistoPyramid, 
+		__global uchar * writeHistoPyramid
+	) {	
+
+	int4 writePos = {get_global_id(0), get_global_id(1), get_global_id(2), 0};
+	int4 readPos = writePos*2;
+	uchar writeValue = read_imagei(readHistoPyramid, sampler, readPos).x + // 0
+		read_imagei(readHistoPyramid, sampler, readPos+cubeOffsets[1]).x + // 1
+		read_imagei(readHistoPyramid, sampler, readPos+cubeOffsets[2]).x + // 2
+		read_imagei(readHistoPyramid, sampler, readPos+cubeOffsets[3]).x + // 3
+		read_imagei(readHistoPyramid, sampler, readPos+cubeOffsets[4]).x + // 4
+		read_imagei(readHistoPyramid, sampler, readPos+cubeOffsets[5]).x + // 5
+		read_imagei(readHistoPyramid, sampler, readPos+cubeOffsets[6]).x + // 6
+		read_imagei(readHistoPyramid, sampler, readPos+cubeOffsets[7]).x; // 7
+
+    writeHistoPyramid[writePos.x+writePos.y*get_global_size(0)+writePos.z*get_global_size(0)*get_global_size(0)] = writeValue;
+}
+
+__kernel void constructHPLevelShort(
+		__read_only image3d_t readHistoPyramid, 
+		__global ushort * writeHistoPyramid
+	) {	
+
+	int4 writePos = {get_global_id(0), get_global_id(1), get_global_id(2), 0};
+	int4 readPos = writePos*2;
+	ushort writeValue = read_imagei(readHistoPyramid, sampler, readPos).x + // 0
+		read_imagei(readHistoPyramid, sampler, readPos+cubeOffsets[1]).x + // 1
+		read_imagei(readHistoPyramid, sampler, readPos+cubeOffsets[2]).x + // 2
+		read_imagei(readHistoPyramid, sampler, readPos+cubeOffsets[3]).x + // 3
+		read_imagei(readHistoPyramid, sampler, readPos+cubeOffsets[4]).x + // 4
+		read_imagei(readHistoPyramid, sampler, readPos+cubeOffsets[5]).x + // 5
+		read_imagei(readHistoPyramid, sampler, readPos+cubeOffsets[6]).x + // 6
+		read_imagei(readHistoPyramid, sampler, readPos+cubeOffsets[7]).x; // 7
+
+    writeHistoPyramid[writePos.x+writePos.y*get_global_size(0)+writePos.z*get_global_size(0)*get_global_size(0)] = writeValue;
+}
+
 
 int4 scanHPLevel(int target, __read_only image3d_t hp, int4 current) {
 	
@@ -474,7 +513,7 @@ __kernel void traverseHP(
 __constant uchar nrOfTriangles[256] = {0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 2, 1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 3, 1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 3, 2, 3, 3, 2, 3, 4, 4, 3, 3, 4, 4, 3, 4, 5, 5, 2, 1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 3, 2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 4, 2, 3, 3, 4, 3, 4, 2, 3, 3, 4, 4, 5, 4, 5, 3, 2, 3, 4, 4, 3, 4, 5, 3, 2, 4, 5, 5, 4, 5, 2, 4, 1, 1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 3, 2, 3, 3, 4, 3, 4, 4, 5, 3, 2, 4, 3, 4, 3, 5, 2, 2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 4, 3, 4, 4, 3, 4, 5, 5, 4, 4, 3, 5, 2, 5, 4, 2, 1, 2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 2, 3, 3, 2, 3, 4, 4, 5, 4, 5, 5, 2, 4, 3, 5, 4, 3, 2, 4, 1, 3, 4, 4, 5, 4, 5, 3, 4, 4, 5, 5, 2, 3, 4, 2, 1, 2, 3, 3, 2, 3, 4, 2, 1, 3, 2, 4, 1, 2, 1, 1, 0};
 
 __kernel void classifyCubes(
-        __global char * histoPyramid,
+        __global uchar * histoPyramid,
 		__read_only image3d_t rawData,
 		__private int isolevel
 		) {
@@ -493,5 +532,5 @@ __kernel void classifyCubes(
     ((read_imagei(rawData, sampler, pos + cubeOffsets[6]).x > isolevel) << 7);
 
     // Store number of triangles
-    vstore4((uint4)(nrOfTriangles[cubeindex], cubeindex, first, 0), pos.x+pos.y*get_global_size(0)+pos.z*get_global_size(0)*get_global_size(0), histoPyramid);
+    vstore4((uchar4)(nrOfTriangles[cubeindex], cubeindex, first, 0), pos.x+pos.y*get_global_size(0)+pos.z*get_global_size(0)*get_global_size(0), histoPyramid);
 }

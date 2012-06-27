@@ -14,6 +14,8 @@ int windowWidth, windowHeight;
 
 Image3D rawData;
 Kernel constructHPLevelKernel;
+Kernel constructHPLevelCharKernel;
+Kernel constructHPLevelShortKernel;
 Kernel classifyCubesKernel;
 Kernel traverseHPKernel;
 vector<Image3D> images;
@@ -410,6 +412,11 @@ void setupOpenCL(uchar * voxels, int size) {
 		classifyCubesKernel = Kernel(program, "classifyCubes");
 		traverseHPKernel = Kernel(program, "traverseHP");
 
+        if(!writingTo3DTextures) {
+            constructHPLevelCharKernel = Kernel(program, "constructHPLevelChar");
+            constructHPLevelShortKernel = Kernel(program, "constructHPLevelShort");
+        }
+
     } catch(Error error) {
        std::cout << error.what() << "(" << error.err() << ")" << std::endl;
        std::cout << getCLErrorString(error.err()) << std::endl;
@@ -419,8 +426,9 @@ void setupOpenCL(uchar * voxels, int size) {
 
 void histoPyramidConstruction() {
 
-        updateScalarField();
+    updateScalarField();
 
+    if(writingTo3DTextures) {
         // Run base to first level
 		constructHPLevelKernel.setArg(0, images[0]);
 		constructHPLevelKernel.setArg(1, images[1]);
@@ -445,6 +453,66 @@ void histoPyramidConstruction() {
                 NullRange
 			);
         }
+    } else {
+        cl::size_t<3> offset;
+        offset[0] = 0;
+        offset[1] = 0;
+        offset[2] = 0;
+        cl::size_t<3> region;
+        region[0] = SIZE/2;
+        region[1] = SIZE/2;
+        region[2] = SIZE/2;
+
+        // Run base to first level
+		constructHPLevelCharKernel.setArg(0, images[0]);
+		constructHPLevelCharKernel.setArg(1, buffers[1]);
+
+        queue.enqueueNDRangeKernel(
+			constructHPLevelCharKernel, 
+			NullRange, 
+			NDRange(SIZE/2, SIZE/2, SIZE/2), 
+			NullRange
+		);
+
+        // Copy buffer to image
+        queue.enqueueCopyBufferToImage(buffers[1], images[1], 0, offset, region);
+
+        int previous = SIZE / 2;
+        // Run level 2 to top level
+        for(int i = 1; i < 4; i++) {
+			constructHPLevelShortKernel.setArg(0, images[i]);
+			constructHPLevelShortKernel.setArg(1, buffers[i+1]);
+			previous /= 2;
+            queue.enqueueNDRangeKernel(
+				constructHPLevelShortKernel, 
+				NullRange, 
+				NDRange(previous, previous, previous), 
+                NullRange
+			);
+            region[0] = previous;
+            region[1] = previous;
+            region[2] = previous;
+            // Copy buffer to image
+            queue.enqueueCopyBufferToImage(buffers[i+1], images[i+1], 0, offset, region);
+        }
+        for(int i = 4; i < log2((float)SIZE)-1; i++) {
+			constructHPLevelKernel.setArg(0, images[i]);
+			constructHPLevelKernel.setArg(1, buffers[i+1]);
+			previous /= 2;
+            queue.enqueueNDRangeKernel(
+				constructHPLevelKernel, 
+				NullRange, 
+				NDRange(previous, previous, previous), 
+                NullRange
+			);
+            region[0] = previous;
+            region[1] = previous;
+            region[2] = previous;
+            // Copy buffer to image
+            queue.enqueueCopyBufferToImage(buffers[i+1], images[i+1], 0, offset, region);
+        }
+
+    }
 }
 
 void updateScalarField() {
