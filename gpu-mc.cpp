@@ -17,6 +17,7 @@ Kernel constructHPLevelKernel;
 Kernel classifyCubesKernel;
 Kernel traverseHPKernel;
 vector<Image3D> images;
+vector<Buffer> buffers;
 
 Sizef scalingFactor;
 Sizef translation;
@@ -370,6 +371,25 @@ void setupOpenCL(uchar * voxels, int size) {
 				bufferSize = 2; // Image cant be 1x1x1
 			images.push_back(Image3D(context, CL_MEM_READ_WRITE, ImageFormat(CL_R, CL_UNSIGNED_INT32), bufferSize, bufferSize, bufferSize));
             bufferSize /= 2;
+        }
+
+        // If writing to 3D textures is not supported we to create buffers to write to aswell
+        if(!writingTo3DTextures) {
+            bufferSize = SIZE*SIZE*SIZE;
+            buffers.push_back(Buffer(context, CL_MEM_WRITE_ONLY, sizeof(char)*bufferSize));
+            bufferSize /= 8;
+            buffers.push_back(Buffer(context, CL_MEM_WRITE_ONLY, sizeof(char)*bufferSize));
+            bufferSize /= 8;
+            buffers.push_back(Buffer(context, CL_MEM_WRITE_ONLY, sizeof(short)*bufferSize));
+            bufferSize /= 8;
+            buffers.push_back(Buffer(context, CL_MEM_WRITE_ONLY, sizeof(short)*bufferSize));
+            bufferSize /= 8;
+            buffers.push_back(Buffer(context, CL_MEM_WRITE_ONLY, sizeof(short)*bufferSize));
+            bufferSize /= 8;
+            for(int i = 5; i < (log2((float)SIZE)); i ++) {
+                buffers.push_back(Buffer(context, CL_MEM_WRITE_ONLY, sizeof(int)*bufferSize));
+                bufferSize /= 8;
+            }
         }
 
         // Transfer dataset to device
