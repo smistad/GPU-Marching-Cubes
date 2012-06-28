@@ -77,6 +77,7 @@ void reshape(int width, int height) {
     windowWidth = width;
     windowHeight = height;
 	glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
     glViewport(0, 0, width, height);
 	gluPerspective(45.0f, (GLfloat)width/(GLfloat)height, 0.5f, 10000.0f);
 }
@@ -324,6 +325,7 @@ void setupOpenCL(uchar * voxels, int size) {
             sourceFilename = "gpu-mc.cl";
         } else {
             std::cout << "Writing to 3D textures is not supported on this device. Writing to regular buffers instead." << std::endl;
+            std::cout << "Note that this is a bit slower and use more memory." << std::endl;
             writingTo3DTextures = false;
             sourceFilename = "gpu-mc-no-3d-write.cl";
         }
