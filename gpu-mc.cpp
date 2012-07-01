@@ -13,6 +13,8 @@ int isolevel = 50;
 int windowWidth, windowHeight;
 
 Image3D rawData;
+Image3D cubeIndexesImage;
+Buffer cubeIndexesBuffer;
 Kernel constructHPLevelKernel;
 Kernel constructHPLevelCharKernel;
 Kernel constructHPLevelShortKernel;
@@ -88,7 +90,11 @@ void renderScene() {
 
     // Read top of histoPyramid an use this size to allocate VBO below
 	int sum[8] = {0,0,0,0,0,0,0,0};
-    queue.enqueueReadImage(images[images.size()-1], CL_FALSE, origin, region, 0, 0, sum);
+    if(writingTo3DTextures) {
+        queue.enqueueReadImage(images[images.size()-1], CL_FALSE, origin, region, 0, 0, sum);
+    } else {
+        queue.enqueueReadBuffer(buffers[buffers.size()-1], CL_FALSE, 0, sizeof(int)*8, sum);
+    }
 
 	glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
 	queue.finish();
@@ -327,7 +333,7 @@ void setupOpenCL(uchar * voxels, int size) {
             std::cout << "Writing to 3D textures is not supported on this device. Writing to regular buffers instead." << std::endl;
             std::cout << "Note that this is a bit slower and use more memory." << std::endl;
             writingTo3DTextures = false;
-            sourceFilename = "gpu-mc-no-3d-write.cl";
+            sourceFilename = "gpu-mc-morton.cl";
         }
 
         // Read source file
@@ -358,45 +364,51 @@ void setupOpenCL(uchar * voxels, int size) {
             throw error;
         } 
 
-        // Create images for the HistogramPyramid
-        int bufferSize = SIZE;
-		// Make the two first buffers use INT8
-		images.push_back(Image3D(context, CL_MEM_READ_WRITE, ImageFormat(CL_RGBA, CL_UNSIGNED_INT8), bufferSize, bufferSize, bufferSize));
-		bufferSize /= 2;
-		images.push_back(Image3D(context, CL_MEM_READ_WRITE, ImageFormat(CL_R, CL_UNSIGNED_INT8), bufferSize, bufferSize, bufferSize));
-		bufferSize /= 2;
-		// And the third, fourth and fifth INT16
-		images.push_back(Image3D(context, CL_MEM_READ_WRITE, ImageFormat(CL_R, CL_UNSIGNED_INT16), bufferSize, bufferSize, bufferSize));
-		bufferSize /= 2;
-		images.push_back(Image3D(context, CL_MEM_READ_WRITE, ImageFormat(CL_R, CL_UNSIGNED_INT16), bufferSize, bufferSize, bufferSize));
-		bufferSize /= 2;
-		images.push_back(Image3D(context, CL_MEM_READ_WRITE, ImageFormat(CL_R, CL_UNSIGNED_INT16), bufferSize, bufferSize, bufferSize));
-		bufferSize /= 2;
-        // The rest will use INT32
-        for(int i = 5; i < (log2((float)SIZE)); i ++) {
-			if(bufferSize == 1)
-				bufferSize = 2; // Image cant be 1x1x1
-			images.push_back(Image3D(context, CL_MEM_READ_WRITE, ImageFormat(CL_R, CL_UNSIGNED_INT32), bufferSize, bufferSize, bufferSize));
+        if(writingTo3DTextures) {
+            // Create images for the HistogramPyramid
+            int bufferSize = SIZE;
+            // Make the two first buffers use INT8
+            images.push_back(Image3D(context, CL_MEM_READ_WRITE, ImageFormat(CL_RGBA, CL_UNSIGNED_INT8), bufferSize, bufferSize, bufferSize));
             bufferSize /= 2;
-        }
+            images.push_back(Image3D(context, CL_MEM_READ_WRITE, ImageFormat(CL_R, CL_UNSIGNED_INT8), bufferSize, bufferSize, bufferSize));
+            bufferSize /= 2;
+            // And the third, fourth and fifth INT16
+            images.push_back(Image3D(context, CL_MEM_READ_WRITE, ImageFormat(CL_R, CL_UNSIGNED_INT16), bufferSize, bufferSize, bufferSize));
+            bufferSize /= 2;
+            images.push_back(Image3D(context, CL_MEM_READ_WRITE, ImageFormat(CL_R, CL_UNSIGNED_INT16), bufferSize, bufferSize, bufferSize));
+            bufferSize /= 2;
+            images.push_back(Image3D(context, CL_MEM_READ_WRITE, ImageFormat(CL_R, CL_UNSIGNED_INT16), bufferSize, bufferSize, bufferSize));
+            bufferSize /= 2;
+            // The rest will use INT32
+            for(int i = 5; i < (log2((float)SIZE)); i ++) {
+                if(bufferSize == 1)
+                    bufferSize = 2; // Image cant be 1x1x1
+                images.push_back(Image3D(context, CL_MEM_READ_WRITE, ImageFormat(CL_R, CL_UNSIGNED_INT32), bufferSize, bufferSize, bufferSize));
+                bufferSize /= 2;
+            }
 
-        // If writing to 3D textures is not supported we to create buffers to write to aswell
-        if(!writingTo3DTextures) {
-            bufferSize = SIZE*SIZE*SIZE;
-            buffers.push_back(Buffer(context, CL_MEM_WRITE_ONLY, 4*sizeof(char)*bufferSize));
+            // If writing to 3D textures is not supported we to create buffers to write to 
+       } else {
+            int bufferSize = SIZE*SIZE*SIZE;
+            buffers.push_back(Buffer(context, CL_MEM_READ_WRITE, sizeof(int)*bufferSize));
             bufferSize /= 8;
-            buffers.push_back(Buffer(context, CL_MEM_WRITE_ONLY, sizeof(char)*bufferSize));
+            buffers.push_back(Buffer(context, CL_MEM_READ_WRITE, sizeof(int)*bufferSize));
             bufferSize /= 8;
-            buffers.push_back(Buffer(context, CL_MEM_WRITE_ONLY, sizeof(short)*bufferSize));
+            buffers.push_back(Buffer(context, CL_MEM_READ_WRITE, sizeof(int)*bufferSize));
             bufferSize /= 8;
-            buffers.push_back(Buffer(context, CL_MEM_WRITE_ONLY, sizeof(short)*bufferSize));
+            buffers.push_back(Buffer(context, CL_MEM_READ_WRITE, sizeof(int)*bufferSize));
             bufferSize /= 8;
-            buffers.push_back(Buffer(context, CL_MEM_WRITE_ONLY, sizeof(short)*bufferSize));
+            buffers.push_back(Buffer(context, CL_MEM_READ_WRITE, sizeof(int)*bufferSize));
             bufferSize /= 8;
             for(int i = 5; i < (log2((float)SIZE)); i ++) {
-                buffers.push_back(Buffer(context, CL_MEM_WRITE_ONLY, sizeof(int)*bufferSize));
+                buffers.push_back(Buffer(context, CL_MEM_READ_WRITE, sizeof(int)*bufferSize));
                 bufferSize /= 8;
             }
+
+            cubeIndexesBuffer = Buffer(context, CL_MEM_WRITE_ONLY, sizeof(char)*SIZE*SIZE*SIZE);
+            cubeIndexesImage = Image3D(context, CL_MEM_READ_ONLY, 
+                    ImageFormat(CL_R, CL_UNSIGNED_INT8),
+                    SIZE, SIZE, SIZE);
         }
 
         // Transfer dataset to device
@@ -413,11 +425,6 @@ void setupOpenCL(uchar * voxels, int size) {
 		constructHPLevelKernel = Kernel(program, "constructHPLevel");
 		classifyCubesKernel = Kernel(program, "classifyCubes");
 		traverseHPKernel = Kernel(program, "traverseHP");
-
-        if(!writingTo3DTextures) {
-            constructHPLevelCharKernel = Kernel(program, "constructHPLevelChar");
-            constructHPLevelShortKernel = Kernel(program, "constructHPLevelShort");
-        }
 
     } catch(Error error) {
        std::cout << error.what() << "(" << error.err() << ")" << std::endl;
@@ -456,49 +463,22 @@ void histoPyramidConstruction() {
 			);
         }
     } else {
-        cl::size_t<3> offset;
-        offset[0] = 0;
-        offset[1] = 0;
-        offset[2] = 0;
-        cl::size_t<3> region;
-        region[0] = SIZE/2;
-        region[1] = SIZE/2;
-        region[2] = SIZE/2;
 
         // Run base to first level
-		constructHPLevelCharKernel.setArg(0, images[0]);
-		constructHPLevelCharKernel.setArg(1, buffers[1]);
+		constructHPLevelKernel.setArg(0, buffers[0]);
+		constructHPLevelKernel.setArg(1, buffers[1]);
 
         queue.enqueueNDRangeKernel(
-			constructHPLevelCharKernel, 
+			constructHPLevelKernel, 
 			NullRange, 
 			NDRange(SIZE/2, SIZE/2, SIZE/2), 
 			NullRange
 		);
 
-        // Copy buffer to image
-        queue.enqueueCopyBufferToImage(buffers[1], images[1], 0, offset, region);
-
         int previous = SIZE / 2;
         // Run level 2 to top level
-        for(int i = 1; i < 4; i++) {
-			constructHPLevelShortKernel.setArg(0, images[i]);
-			constructHPLevelShortKernel.setArg(1, buffers[i+1]);
-			previous /= 2;
-            queue.enqueueNDRangeKernel(
-				constructHPLevelShortKernel, 
-				NullRange, 
-				NDRange(previous, previous, previous), 
-                NullRange
-			);
-            region[0] = previous;
-            region[1] = previous;
-            region[2] = previous;
-            // Copy buffer to image
-            queue.enqueueCopyBufferToImage(buffers[i+1], images[i+1], 0, offset, region);
-        }
-        for(int i = 4; i < log2((float)SIZE)-1; i++) {
-			constructHPLevelKernel.setArg(0, images[i]);
+        for(int i = 1; i < log2((float)SIZE)-1; i++) {
+			constructHPLevelKernel.setArg(0, buffers[i]);
 			constructHPLevelKernel.setArg(1, buffers[i+1]);
 			previous /= 2;
             queue.enqueueNDRangeKernel(
@@ -507,13 +487,7 @@ void histoPyramidConstruction() {
 				NDRange(previous, previous, previous), 
                 NullRange
 			);
-            region[0] = previous;
-            region[1] = previous;
-            region[2] = previous;
-            // Copy buffer to image
-            queue.enqueueCopyBufferToImage(buffers[i+1], images[i+1], 0, offset, region);
         }
-
     }
 }
 
@@ -530,8 +504,9 @@ void updateScalarField() {
         );
     } else {
         classifyCubesKernel.setArg(0, buffers[0]);
-        classifyCubesKernel.setArg(1, rawData);
-        classifyCubesKernel.setArg(2, isolevel);
+        classifyCubesKernel.setArg(1, cubeIndexesBuffer);
+        classifyCubesKernel.setArg(2, rawData);
+        classifyCubesKernel.setArg(3, isolevel);
         queue.enqueueNDRangeKernel(
                 classifyCubesKernel, 
                 NullRange, 
@@ -549,7 +524,7 @@ void updateScalarField() {
         region[2] = SIZE;
 
         // Copy buffer to image
-        queue.enqueueCopyBufferToImage(buffers[0], images[0], 0, offset, region);
+        queue.enqueueCopyBufferToImage(cubeIndexesBuffer, cubeIndexesImage, 0, offset, region);
     }
 }
 
@@ -557,9 +532,18 @@ BufferGL VBOBuffer;
 void histoPyramidTraversal(int sum) {
     // Make OpenCL buffer from OpenGL buffer
 	unsigned int i = 0;
-	for(i = 0; i < images.size(); i++) {
-		traverseHPKernel.setArg(i, images[i]);
-	}
+    if(writingTo3DTextures) {
+        for(i = 0; i < images.size(); i++) {
+            traverseHPKernel.setArg(i, images[i]);
+        }
+    } else {
+        traverseHPKernel.setArg(0, rawData);
+        traverseHPKernel.setArg(1, cubeIndexesImage);
+        for(i = 0; i < buffers.size(); i++) {
+            traverseHPKernel.setArg(i+2, buffers[i]);
+        }
+        i += 2;
+    }
 	
 	VBOBuffer = BufferGL(context, CL_MEM_WRITE_ONLY, VBO_ID);
     traverseHPKernel.setArg(i, VBOBuffer);

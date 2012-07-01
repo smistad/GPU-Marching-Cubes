@@ -1,5 +1,4 @@
-//#pragma OPENCL EXTENSION cl_amd_printf:enable
-#pragma OPENCL EXTENSION cl_khr_3d_image_writes : enable
+#pragma OPENCL EXTENSION cl_amd_printf:enable
 
 __constant sampler_t sampler = CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_CLAMP | CLK_FILTER_NEAREST;
 
@@ -17,6 +16,10 @@ uint Part1By2(uint x) {
 
 uint EncodeMorton3(uint x, uint y, uint z) {
   return (Part1By2(z) << 2) + (Part1By2(y) << 1) + Part1By2(x);
+}
+
+uint EncodeMorton(int4 v) {
+    return EncodeMorton3(v.x,v.y,v.z);
 }
 
 // Inverse of Part1By2 - "delete" all bits not at positions divisible by 3
@@ -64,6 +67,7 @@ __kernel void constructHPLevel(
                     readHistoPyramid[readPos + 2] + 
                     readHistoPyramid[readPos + 3] + 
                     readHistoPyramid[readPos + 4] + 
+                    readHistoPyramid[readPos + 5] + 
                     readHistoPyramid[readPos + 6] + 
                     readHistoPyramid[readPos + 7]; 
 
@@ -84,6 +88,18 @@ int4 scanHPLevel(int target, __global int * hp, int4 current) {
 		read_imagei(hp, sampler, current + cubeOffsets[7]).x
 	};*/
 
+	int8 neighbors = {
+		hp[EncodeMorton(current)],
+		hp[EncodeMorton(current + cubeOffsets[1])],
+		hp[EncodeMorton(current + cubeOffsets[2])],
+		hp[EncodeMorton(current + cubeOffsets[3])],
+		hp[EncodeMorton(current + cubeOffsets[4])],
+		hp[EncodeMorton(current + cubeOffsets[5])],
+		hp[EncodeMorton(current + cubeOffsets[6])],
+		hp[EncodeMorton(current + cubeOffsets[7])],
+	};
+
+    /*
     uint readPos = EncodeMorton3(current.x, current.y, current.z);
 	int8 neighbors = {
         hp[readPos],
@@ -95,6 +111,7 @@ int4 scanHPLevel(int target, __global int * hp, int4 current) {
         hp[readPos + 6],
         hp[readPos + 7],
 	};
+    */
 
 	int acc = current.s3 + neighbors.s0;
 	int8 cmp;
@@ -433,20 +450,20 @@ __constant char triTable[4096] =
 __kernel void traverseHP(
         __read_only image3d_t rawData,
         __read_only image3d_t cubeIndexes,
-        __gloabl int * hp0, // Largest HP
-		__gloabl int * hp1,
-		__gloabl int * hp2,
-		__gloabl int * hp3,
-		__gloabl int * hp4,
-		__gloabl int * hp5,
+        __global int * hp0, // Largest HP
+		__global int * hp1,
+		__global int * hp2,
+		__global int * hp3,
+		__global int * hp4,
+		__global int * hp5,
         #if SIZE > 64
-		__gloabl int * hp6,
+		__global int * hp6,
         #endif
         #if SIZE > 128
-		__gloabl int * hp7,
+		__global int * hp7,
         #endif
         #if SIZE > 256
-		__gloabl int * hp8, 
+		__global int * hp8, 
         #endif
         #if SIZE > 512
 		__global int * hp9, 
@@ -484,6 +501,8 @@ __kernel void traverseHP(
 	cubePosition.z = cubePosition.z / 2;
 
     char vertexNr = 0;
+
+    //printf("cubeindex: %d\n", read_imageui(cubeIndexes, sampler, cubePosition).x);
 
 	// max 5 triangles
 	for(int i = (target-cubePosition.s3)*3; i < (target-cubePosition.s3+1)*3; i++) { // for each vertex in triangle
@@ -547,5 +566,5 @@ __kernel void classifyCubes(
     // Store number of triangles and index
     uint writePos = EncodeMorton3(pos.x,pos.y,pos.z);
     histoPyramid[writePos] = nrOfTriangles[cubeindex];
-    cubeIndexes[pos.x+pos.y*get_global_id(0)+pos.z*get_global_size(0)*get_global_size(1)] = cubeindex;
+    cubeIndexes[pos.x+pos.y*get_global_size(0)+pos.z*get_global_size(0)*get_global_size(1)] = cubeindex;
 }
