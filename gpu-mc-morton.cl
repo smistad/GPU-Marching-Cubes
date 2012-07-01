@@ -513,20 +513,20 @@ __kernel void traverseHP(
         // Store vertex in VBO
 		
         const float3 forwardDifference0 = (float3)(
-                (float)(-read_imagei(rawData, sampler, (int4)(point0.x+1, point0.y, point0.z, 0)).z+read_imagei(rawData, sampler, (int4)(point0.x-1, point0.y, point0.z, 0)).z),
-                (float)(-read_imagei(rawData, sampler, (int4)(point0.x, point0.y+1, point0.z, 0)).z+read_imagei(rawData, sampler, (int4)(point0.x, point0.y-1, point0.z, 0)).z),
-                (float)(-read_imagei(rawData, sampler, (int4)(point0.x, point0.y, point0.z+1, 0)).z+read_imagei(rawData, sampler, (int4)(point0.x, point0.y, point0.z-1, 0)).z)
+                (float)(-read_imagei(rawData, sampler, (int4)(point0.x+1, point0.y, point0.z, 0)).x+read_imagei(rawData, sampler, (int4)(point0.x-1, point0.y, point0.z, 0)).x),
+                (float)(-read_imagei(rawData, sampler, (int4)(point0.x, point0.y+1, point0.z, 0)).x+read_imagei(rawData, sampler, (int4)(point0.x, point0.y-1, point0.z, 0)).x),
+                (float)(-read_imagei(rawData, sampler, (int4)(point0.x, point0.y, point0.z+1, 0)).x+read_imagei(rawData, sampler, (int4)(point0.x, point0.y, point0.z-1, 0)).x)
             );
         const float3 forwardDifference1 = (float3)(
-                (float)(-read_imagei(rawData, sampler, (int4)(point1.x+1, point1.y, point1.z, 0)).z+read_imagei(rawData, sampler, (int4)(point1.x-1, point1.y, point1.z, 0)).z),
-                (float)(-read_imagei(rawData, sampler, (int4)(point1.x, point1.y+1, point1.z, 0)).z+read_imagei(rawData, sampler, (int4)(point1.x, point1.y-1, point1.z, 0)).z),
-                (float)(-read_imagei(rawData, sampler, (int4)(point1.x, point1.y, point1.z+1, 0)).z+read_imagei(rawData, sampler, (int4)(point1.x, point1.y, point1.z-1, 0)).z)
+                (float)(-read_imagei(rawData, sampler, (int4)(point1.x+1, point1.y, point1.z, 0)).x+read_imagei(rawData, sampler, (int4)(point1.x-1, point1.y, point1.z, 0)).x),
+                (float)(-read_imagei(rawData, sampler, (int4)(point1.x, point1.y+1, point1.z, 0)).x+read_imagei(rawData, sampler, (int4)(point1.x, point1.y-1, point1.z, 0)).x),
+                (float)(-read_imagei(rawData, sampler, (int4)(point1.x, point1.y, point1.z+1, 0)).x+read_imagei(rawData, sampler, (int4)(point1.x, point1.y, point1.z-1, 0)).x)
             );
 
-	    const int value0 = read_imagei(rawData, sampler, (int4)(point0.x, point0.y, point0.z, 0)).z;
+	    const int value0 = read_imagei(rawData, sampler, (int4)(point0.x, point0.y, point0.z, 0)).x;
 		const float diff = native_divide(
 			(float)(isolevel-value0), 
-			(float)(read_imagei(rawData, sampler, (int4)(point1.x, point1.y, point1.z, 0)).z - value0));
+			(float)(read_imagei(rawData, sampler, (int4)(point1.x, point1.y, point1.z, 0)).x - value0));
         
 		const float3 vertex = mix((float3)(point0.x, point0.y, point0.z), (float3)(point1.x, point1.y, point1.z), diff);
 
