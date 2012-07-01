@@ -1,4 +1,4 @@
-#pragma OPENCL EXTENSION cl_amd_printf:enable
+//#pragma OPENCL EXTENSION cl_amd_printf:enable
 
 __constant sampler_t sampler = CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_CLAMP | CLK_FILTER_NEAREST;
 
@@ -501,8 +501,6 @@ __kernel void traverseHP(
 	cubePosition.z = cubePosition.z / 2;
 
     char vertexNr = 0;
-
-    //printf("cubeindex: %d\n", read_imageui(cubeIndexes, sampler, cubePosition).x);
 
 	// max 5 triangles
     uchar cubeindex = read_imageui(cubeIndexes, sampler, cubePosition).x;
