@@ -505,8 +505,9 @@ __kernel void traverseHP(
     //printf("cubeindex: %d\n", read_imageui(cubeIndexes, sampler, cubePosition).x);
 
 	// max 5 triangles
+    uchar cubeindex = read_imageui(cubeIndexes, sampler, cubePosition).x;
 	for(int i = (target-cubePosition.s3)*3; i < (target-cubePosition.s3+1)*3; i++) { // for each vertex in triangle
-		const uchar edge = triTable[read_imageui(cubeIndexes, sampler, cubePosition).x*16 + i];
+		const uchar edge = triTable[cubeindex*16 + i];
 		const int3 point0 = (int3)(cubePosition.x + offsets3[edge*6], cubePosition.y + offsets3[edge*6+1], cubePosition.z + offsets3[edge*6+2]);
 		const int3 point1 = (int3)(cubePosition.x + offsets3[edge*6+3], cubePosition.y + offsets3[edge*6+4], cubePosition.z + offsets3[edge*6+5]);
 
