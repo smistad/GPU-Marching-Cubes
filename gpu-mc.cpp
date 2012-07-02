@@ -16,8 +16,10 @@ Image3D rawData;
 Image3D cubeIndexesImage;
 Buffer cubeIndexesBuffer;
 Kernel constructHPLevelKernel;
-Kernel constructHPLevelCharKernel;
-Kernel constructHPLevelShortKernel;
+Kernel constructHPLevelCharCharKernel;
+Kernel constructHPLevelCharShortKernel;
+Kernel constructHPLevelShortShortKernel;
+Kernel constructHPLevelShortIntKernel;
 Kernel classifyCubesKernel;
 Kernel traverseHPKernel;
 vector<Image3D> images;
@@ -331,7 +333,7 @@ void setupOpenCL(uchar * voxels, int size) {
             sourceFilename = "gpu-mc.cl";
         } else {
             std::cout << "Writing to 3D textures is not supported on this device. Writing to regular buffers instead." << std::endl;
-            std::cout << "Note that this is a bit slower and use more memory." << std::endl;
+            std::cout << "Note that this is a bit slower." << std::endl;
             writingTo3DTextures = false;
             sourceFilename = "gpu-mc-morton.cl";
         }
@@ -390,15 +392,15 @@ void setupOpenCL(uchar * voxels, int size) {
             // If writing to 3D textures is not supported we to create buffers to write to 
        } else {
             int bufferSize = SIZE*SIZE*SIZE;
-            buffers.push_back(Buffer(context, CL_MEM_READ_WRITE, sizeof(int)*bufferSize));
+            buffers.push_back(Buffer(context, CL_MEM_READ_WRITE, sizeof(char)*bufferSize));
             bufferSize /= 8;
-            buffers.push_back(Buffer(context, CL_MEM_READ_WRITE, sizeof(int)*bufferSize));
+            buffers.push_back(Buffer(context, CL_MEM_READ_WRITE, sizeof(char)*bufferSize));
             bufferSize /= 8;
-            buffers.push_back(Buffer(context, CL_MEM_READ_WRITE, sizeof(int)*bufferSize));
+            buffers.push_back(Buffer(context, CL_MEM_READ_WRITE, sizeof(short)*bufferSize));
             bufferSize /= 8;
-            buffers.push_back(Buffer(context, CL_MEM_READ_WRITE, sizeof(int)*bufferSize));
+            buffers.push_back(Buffer(context, CL_MEM_READ_WRITE, sizeof(short)*bufferSize));
             bufferSize /= 8;
-            buffers.push_back(Buffer(context, CL_MEM_READ_WRITE, sizeof(int)*bufferSize));
+            buffers.push_back(Buffer(context, CL_MEM_READ_WRITE, sizeof(short)*bufferSize));
             bufferSize /= 8;
             for(int i = 5; i < (log2((float)SIZE)); i ++) {
                 buffers.push_back(Buffer(context, CL_MEM_READ_WRITE, sizeof(int)*bufferSize));
@@ -425,6 +427,13 @@ void setupOpenCL(uchar * voxels, int size) {
 		constructHPLevelKernel = Kernel(program, "constructHPLevel");
 		classifyCubesKernel = Kernel(program, "classifyCubes");
 		traverseHPKernel = Kernel(program, "traverseHP");
+
+        if(!writingTo3DTextures) {
+            constructHPLevelCharCharKernel = Kernel(program, "constructHPLevelCharChar");
+            constructHPLevelCharShortKernel = Kernel(program, "constructHPLevelCharShort");
+            constructHPLevelShortShortKernel = Kernel(program, "constructHPLevelShortShort");
+            constructHPLevelShortIntKernel = Kernel(program, "constructHPLevelShortInt");
+        }
 
     } catch(Error error) {
        std::cout << error.what() << "(" << error.err() << ")" << std::endl;
@@ -465,19 +474,68 @@ void histoPyramidConstruction() {
     } else {
 
         // Run base to first level
-		constructHPLevelKernel.setArg(0, buffers[0]);
-		constructHPLevelKernel.setArg(1, buffers[1]);
+		constructHPLevelCharCharKernel.setArg(0, buffers[0]);
+		constructHPLevelCharCharKernel.setArg(1, buffers[1]);
 
         queue.enqueueNDRangeKernel(
-			constructHPLevelKernel, 
+			constructHPLevelCharCharKernel, 
 			NullRange, 
 			NDRange(SIZE/2, SIZE/2, SIZE/2), 
 			NullRange
 		);
 
         int previous = SIZE / 2;
+
+		constructHPLevelCharShortKernel.setArg(0, buffers[1]);
+		constructHPLevelCharShortKernel.setArg(1, buffers[2]);
+
+        queue.enqueueNDRangeKernel(
+			constructHPLevelCharShortKernel, 
+			NullRange, 
+			NDRange(previous/2, previous/2, previous/2), 
+			NullRange
+		);
+
+        previous /= 2;
+
+		constructHPLevelShortShortKernel.setArg(0, buffers[2]);
+		constructHPLevelShortShortKernel.setArg(1, buffers[3]);
+
+        queue.enqueueNDRangeKernel(
+			constructHPLevelShortShortKernel, 
+			NullRange, 
+			NDRange(previous/2, previous/2, previous/2), 
+			NullRange
+		);
+
+        previous /= 2;
+
+		constructHPLevelShortShortKernel.setArg(0, buffers[3]);
+		constructHPLevelShortShortKernel.setArg(1, buffers[4]);
+
+        queue.enqueueNDRangeKernel(
+			constructHPLevelShortShortKernel, 
+			NullRange, 
+			NDRange(previous/2, previous/2, previous/2), 
+			NullRange
+		);
+
+        previous /= 2;
+
+        constructHPLevelShortIntKernel.setArg(0, buffers[4]);
+		constructHPLevelShortIntKernel.setArg(1, buffers[5]);
+
+        queue.enqueueNDRangeKernel(
+			constructHPLevelShortIntKernel, 
+			NullRange, 
+			NDRange(previous/2, previous/2, previous/2), 
+			NullRange
+		);
+
+        previous /= 2;
+
         // Run level 2 to top level
-        for(int i = 1; i < log2((float)SIZE)-1; i++) {
+        for(int i = 5; i < log2((float)SIZE)-1; i++) {
 			constructHPLevelKernel.setArg(0, buffers[i]);
 			constructHPLevelKernel.setArg(1, buffers[i+1]);
 			previous /= 2;
