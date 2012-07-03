@@ -2,14 +2,15 @@
 
 // Define some globals
 GLuint VBO_ID = 0;
-GLfloat angle = 0.0f;
 Program program;
 CommandQueue queue;
 Context context;
 bool writingTo3DTextures;
+bool extractSurfaceOnEveryFrame;
+bool extractSurface;
 
 int SIZE;
-int isolevel = 50;
+int isolevel = 51;
 int windowWidth, windowHeight;
 
 Image3D rawData;
@@ -47,9 +48,9 @@ void mouseMovement(int x, int y) {
     glutWarpPointer(cx, cy); //Bring the cursor to the middle
 }
 
-void renderBitmapString(float x, float y, float z, void *font, char *string) {  
+void renderBitmapString(float x, float y, void *font, char *string) {  
     char *c;
-    glRasterPos3f(x, y,z);
+    glRasterPos2f(x, y);
     for(c = string; *c != '\0'; c++) {
         glutBitmapCharacter(font, *c);
     }
@@ -57,20 +58,30 @@ void renderBitmapString(float x, float y, float z, void *font, char *string) {
 
 int frame = 0;
 int timebase = 0;
-char s[80];
+char s[100];
 int previousTime = 0;
 void drawFPSCounter(int sum) {
 	frame++;
 
     int time = glutGet(GLUT_ELAPSED_TIME);
 	if (time - timebase > 1000) { // 1 times per second
-		sprintf(s,"Marching Cubes - Triangles: %d FPS: %4.2f Speed: %d ms", sum, frame*1000.0/(time-timebase), (int)round(time - previousTime));
+		sprintf(s,"Triangles: %d FPS: %4.2f. Speed: %d ms. Isovalue: %4.3f", sum, frame*1000.0/(time-timebase), (int)round(time - previousTime), (float)isolevel / 255.0f);
 		timebase = time;
 		frame = 0;
 	}
 
 	previousTime = time;
-    glutSetWindowTitle(s);
+    glDisable( GL_DEPTH_TEST );
+    glDisable(GL_LIGHTING);
+    renderBitmapString(-0.99f, 0.95f, GLUT_BITMAP_8_BY_13, s);
+    renderBitmapString(-0.99f, 0.9f, GLUT_BITMAP_8_BY_13, "+/-: Change isovalue. W,A,S,D: Move object. Mouse: Rotate object.");
+    if(extractSurfaceOnEveryFrame) {
+        renderBitmapString(-0.99f, 0.85, GLUT_BITMAP_8_BY_13, "Extracting surfaces on every frame. Press 'e' to change.");
+    }else{
+        renderBitmapString(-0.99f, 0.85f, GLUT_BITMAP_8_BY_13, "Extracting surfaces only on isovalue change. Press 'e' to change.");
+    }
+    glEnable(GL_LIGHTING);
+    glEnable(GL_DEPTH_TEST);
 }
 
 void idle() {
@@ -83,72 +94,53 @@ void reshape(int width, int height) {
 	glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
     glViewport(0, 0, width, height);
-	gluPerspective(45.0f, (GLfloat)width/(GLfloat)height, 0.5f, 10000.0f);
+	gluPerspective(45.0f, (GLfloat)width/(GLfloat)height, 0.5f, 10.0f);
 }
-cl::size_t<3> origin; //offset
+cl::size_t<3> origin; 
 cl::size_t<3> region;
+int totalSum;
 void renderScene() {
-    histoPyramidConstruction();
+    glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
+    if(extractSurfaceOnEveryFrame || extractSurface) {
+        glDeleteBuffers(1, &VBO_ID);
+        histoPyramidConstruction();
 
-    // Read top of histoPyramid an use this size to allocate VBO below
-	int sum[8] = {0,0,0,0,0,0,0,0};
-    if(writingTo3DTextures) {
-        queue.enqueueReadImage(images[images.size()-1], CL_FALSE, origin, region, 0, 0, sum);
-    } else {
-        queue.enqueueReadBuffer(buffers[buffers.size()-1], CL_FALSE, 0, sizeof(int)*8, sum);
+        // Read top of histoPyramid an use this size to allocate VBO below
+        int * sum = new int[8];
+        if(writingTo3DTextures) {
+            queue.enqueueReadImage(images[images.size()-1], CL_FALSE, origin, region, 0, 0, sum);
+        } else {
+            queue.enqueueReadBuffer(buffers[buffers.size()-1], CL_FALSE, 0, sizeof(int)*8, sum);
+        }
+
+        queue.finish();
+        totalSum = sum[0] + sum[1] + sum[2] + sum[3] + sum[4] + sum[5] + sum[6] + sum[7] ;
+        
+        if(totalSum == 0) {
+            std::cout << "No triangles were extracted. Check isovalue." << std::endl;
+            return;
+        }
+        
+        // Create new VBO
+        glGenBuffers(1, &VBO_ID);
+        glBindBuffer(GL_ARRAY_BUFFER, VBO_ID);
+        glBufferData(GL_ARRAY_BUFFER, totalSum*18*sizeof(cl_float), NULL, GL_STATIC_DRAW);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+        // Traverse the histoPyramid and fill VBO
+        histoPyramidTraversal(totalSum);
+        queue.flush();
     }
 
-	glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
-	queue.finish();
-	int totalSum = sum[0] + sum[1] + sum[2] + sum[3] + sum[4] + sum[5] + sum[6] + sum[7] ;
-    
-	if(totalSum == 0) {
-		std::cout << "HistoPyramid result is 0" << std::endl;
-        return;
-	}
-	
-	// 128 MB
-	//if(totalSum >= 1864135) // Need to split into several VBO's to support larger structures
-	//	isolevel_up = true;
-
-	// Create new VBO
-	glGenBuffers(1, &VBO_ID);
-	glBindBuffer(GL_ARRAY_BUFFER, VBO_ID);
-	glBufferData(GL_ARRAY_BUFFER, totalSum*18*sizeof(cl_float), NULL, GL_STATIC_DRAW);
-	//std::cout << "VBO using: " << sum[0]*18*sizeof(cl_float) / (1024*1024) << " M bytes" << std::endl;
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-
-    // Traverse the histoPyramid and fill VBO
-    histoPyramidTraversal(totalSum);
-
     // Render VBO
+    reshape(windowWidth,windowHeight);
     glMatrixMode(GL_MODELVIEW);
 	glLoadIdentity();
-	//glRotatef(270.0f, 1.0f, 0.0f, 0.0f);	
-	drawFPSCounter(totalSum);
-
+   
 	glTranslatef(-camX, -camY, -camZ);
 
 	glRotatef(xrot,1.0,0.0,0.0);
 	glRotatef(yrot,0.0, 1.0, 0.0);
-
-    // Draw axis
-    /*
-    glPushMatrix();
-    glBegin(GL_LINES);
-        glColor3f(1.0f, 0.0f, 0.0f);
-
-        glVertex3f(0.0f, 0.0f, 0.0f);
-        glVertex3f(0.0f, 2.0f, 0.0f);
-
-        glVertex3f(0.0f, 0.0f, 0.0f);
-        glVertex3f(2.0f, 0.0f, 0.0f);
-
-        glVertex3f(0.0f, 0.0f, 0.0f);
-        glVertex3f(0.0f, 0.0f, 2.0f);
-    glEnd();
-    glPopMatrix();
-    */
 
     glPushMatrix();
     glColor3f(1.0f, 1.0f, 1.0f);
@@ -164,7 +156,8 @@ void renderScene() {
     glVertexPointer(3, GL_FLOAT, 24, BUFFER_OFFSET(0));
 	glNormalPointer(GL_FLOAT, 24, BUFFER_OFFSET(12));    
 
-	queue.finish();
+    if(extractSurfaceOnEveryFrame || extractSurface) 
+        queue.finish();
 	//glWaitSync(traversalSync, 0, GL_TIMEOUT_IGNORED);
     glDrawArrays(GL_TRIANGLES, 0, totalSum*3);
 	
@@ -174,13 +167,21 @@ void renderScene() {
     glDisableClientState(GL_NORMAL_ARRAY);
 
     glPopMatrix();
+
+    // Render text
+    glPushMatrix();
+    glMatrixMode( GL_PROJECTION );
+    glLoadIdentity();
+    glMatrixMode( GL_MODELVIEW );
+    glLoadIdentity();
+    glColor3f(1.0f, 1.0f, 0.0f);
+	drawFPSCounter(totalSum);
+    glPopMatrix();
+
+
     glutSwapBuffers();
-    glDeleteBuffers(1, &VBO_ID);
-	
-    angle += 0.1f;
-
+    extractSurface = false;
 }
-
 
 void run() {
     glutMainLoop();
@@ -189,9 +190,10 @@ void run() {
 void setupOpenGL(int * argc, char ** argv, int size, int sizeX, int sizeY, int sizeZ, float spacingX, float spacingY, float spacingZ) {
     /* Initialize GLUT */
     glutInit(argc, argv);
-    glutInitDisplayMode(GLUT_DEPTH | GLUT_DOUBLE);
+    glutInitDisplayMode(GLUT_DEPTH | GLUT_DOUBLE | GLUT_RGBA);
     glutInitWindowPosition(0, 0);
-    glutInitWindowSize(glutGet(GLUT_SCREEN_WIDTH),glutGet(GLUT_SCREEN_HEIGHT));
+    //glutInitWindowSize(glutGet(GLUT_SCREEN_WIDTH),glutGet(GLUT_SCREEN_HEIGHT));
+    glutInitWindowSize(800, 800);
     glutCreateWindow("GPU Marching Cubes");
     //glutFullScreen();	
     glutDisplayFunc(renderScene);
@@ -240,15 +242,22 @@ void setupOpenGL(int * argc, char ** argv, int size, int sizeX, int sizeY, int s
     translation.x = (float)sizeX/2.0f;
     translation.y = -(float)sizeY/2.0f;
     translation.z = -(float)sizeZ/2.0f;
+
+    extractSurface = true;
+    extractSurfaceOnEveryFrame = false;
 }
 
 void keyboard(unsigned char key, int x, int y) {
 	switch(key) {
 		case '+':
 			isolevel ++;
+            if(!extractSurfaceOnEveryFrame)
+                extractSurface = true;
 		break;
 		case '-':
 			isolevel --;
+            if(!extractSurfaceOnEveryFrame)
+                extractSurface = true;
 		break;
         //WASD movement
         case 'w':
@@ -259,11 +268,15 @@ void keyboard(unsigned char key, int x, int y) {
         break;
         case 'a':
             camX -= 0.1f;
-            break;
+        break;
         case 'd':
             camX += 0.1f;
         break;
+        case 'e':
+            extractSurfaceOnEveryFrame = !extractSurfaceOnEveryFrame;
+        break;
         case 27:
+        case 'q':
             //TODO some clean up
             exit(0);
         break;
