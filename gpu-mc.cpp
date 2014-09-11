@@ -34,8 +34,13 @@ float camX, camY, camZ = 4.0f; //X, Y, and Z
 float lastx, lasty, xrot, yrot, xrotrad, yrotrad; //Last pos and rotation
 float speed = 0.1f; //Movement speed
 
+// Some functions missing in windows
 inline double log2(double x) {
     return log(x)/log(2.0);
+}
+
+inline double round(double d) {
+  return floor(d + 0.5);
 }
 
 void mouseMovement(int x, int y) {
@@ -110,6 +115,11 @@ void renderScene() {
     if(extractSurfaceOnEveryFrame || extractSurface) {
         // Delete VBO buffer
         glDeleteBuffers(1, &VBO_ID);
+        /*
+        // For some reason this doesn't work?
+        if(VBOBuffer != NULL)
+            delete VBOBuffer;
+        */
         histoPyramidConstruction();
 
         // Read top of histoPyramid an use this size to allocate VBO below
