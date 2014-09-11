@@ -12,6 +12,7 @@ bool extractSurface;
 int SIZE;
 int isolevel = 51;
 int windowWidth, windowHeight;
+int windowID;
 
 Image3D rawData;
 Image3D cubeIndexesImage;
@@ -32,6 +33,10 @@ Sizef translation;
 float camX, camY, camZ = 4.0f; //X, Y, and Z
 float lastx, lasty, xrot, yrot, xrotrad, yrotrad; //Last pos and rotation
 float speed = 0.1f; //Movement speed
+
+inline double log2(double x) {
+    return log(x)/log(2.0);
+}
 
 void mouseMovement(int x, int y) {
     int cx = windowWidth/2;
@@ -99,9 +104,11 @@ void reshape(int width, int height) {
 cl::size_t<3> origin; 
 cl::size_t<3> region;
 int totalSum;
+BufferGL *VBOBuffer;
 void renderScene() {
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
     if(extractSurfaceOnEveryFrame || extractSurface) {
+        // Delete VBO buffer
         glDeleteBuffers(1, &VBO_ID);
         histoPyramidConstruction();
 
@@ -194,7 +201,7 @@ void setupOpenGL(int * argc, char ** argv, int size, int sizeX, int sizeY, int s
     glutInitWindowPosition(0, 0);
     //glutInitWindowSize(glutGet(GLUT_SCREEN_WIDTH),glutGet(GLUT_SCREEN_HEIGHT));
     glutInitWindowSize(800, 800);
-    glutCreateWindow("GPU Marching Cubes");
+    windowID = glutCreateWindow("GPU Marching Cubes");
     //glutFullScreen();	
     glutDisplayFunc(renderScene);
     glutIdleFunc(idle);
@@ -278,7 +285,7 @@ void keyboard(unsigned char key, int x, int y) {
         case 27:
         case 'q':
             //TODO some clean up
-            exit(0);
+            glutDestroyWindow(windowID);
         break;
 	}
 }
@@ -415,7 +422,7 @@ void setupOpenCL(uchar * voxels, int size) {
             bufferSize /= 8;
             buffers.push_back(Buffer(context, CL_MEM_READ_WRITE, sizeof(short)*bufferSize));
             bufferSize /= 8;
-            for(int i = 5; i < (log2((float)SIZE)); i ++) {
+            for(int i = 5; i < log2((float)SIZE); i ++) {
                 buffers.push_back(Buffer(context, CL_MEM_READ_WRITE, sizeof(int)*bufferSize));
                 bufferSize /= 8;
             }
@@ -548,7 +555,7 @@ void histoPyramidConstruction() {
         previous /= 2;
 
         // Run level 2 to top level
-        for(int i = 5; i < log2((float)SIZE)-1; i++) {
+        for(int i = 5; i <  log2(SIZE)-1; i++) {
 			constructHPLevelKernel.setArg(0, buffers[i]);
 			constructHPLevelKernel.setArg(1, buffers[i+1]);
 			previous /= 2;
@@ -599,7 +606,6 @@ void updateScalarField() {
     }
 }
 
-BufferGL VBOBuffer;
 void histoPyramidTraversal(int sum) {
     // Make OpenCL buffer from OpenGL buffer
 	unsigned int i = 0;
@@ -616,14 +622,14 @@ void histoPyramidTraversal(int sum) {
         i += 2;
     }
 	
-	VBOBuffer = BufferGL(context, CL_MEM_WRITE_ONLY, VBO_ID);
-    traverseHPKernel.setArg(i, VBOBuffer);
+	VBOBuffer = new BufferGL(context, CL_MEM_WRITE_ONLY, VBO_ID);
+    traverseHPKernel.setArg(i, *VBOBuffer);
 	traverseHPKernel.setArg(i+1, isolevel);
 	traverseHPKernel.setArg(i+2, sum);
 	//cl_event syncEvent = clCreateEventFromGLsyncKHR((cl_context)context(), (cl_GLsync)glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0), 0);
 	//glFinish();
 	vector<Memory> v;
-	v.push_back(VBOBuffer);
+	v.push_back(*VBOBuffer);
 	//vector<Event> events;
 	//Event e;
 	//events.push_back(Event(syncEvent));
