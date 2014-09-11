@@ -379,7 +379,6 @@ __constant char triTable[4096] =
 0, 3, 8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
 -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
 
-#define SIZE **HP_SIZE**
 __kernel void traverseHP(
         __read_only image3d_t hp0, // Largest HP
 		__read_only image3d_t hp1,

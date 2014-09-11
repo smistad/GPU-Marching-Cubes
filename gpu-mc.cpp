@@ -369,8 +369,6 @@ void setupOpenCL(uchar * voxels, int size) {
             (std::istreambuf_iterator<char>()));
         
         // Insert size
-        int pos = sourceCode.find("**HP_SIZE**");
-        sourceCode = sourceCode.replace(pos, 11, to_string(SIZE));
         Program::Sources source(1, std::make_pair(sourceCode.c_str(), sourceCode.length()+1));
 
         // Make program of the source code in the context
@@ -378,7 +376,8 @@ void setupOpenCL(uchar * voxels, int size) {
     
         // Build program for these specific devices
         try{
-            program.build(devices);
+            std::string buildOptions = "-DSIZE=" + to_string(SIZE);
+            program.build(devices, buildOptions.c_str());
         } catch(Error error) {
             if(error.err() == CL_BUILD_PROGRAM_FAILURE) {
                 std::cout << "Build log:\t" << program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(devices[0]) << std::endl;
