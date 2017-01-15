@@ -1,7 +1,9 @@
 About
 ========================================
 A GPU implementation of the Marching Cubes algorithm for extracting surfaces from volumes using OpenCL and OpenGL.
-See http://www.thebigblob.com/marching-cubes-implementation-using-opencl-and-opengl/ for detailed information about this implementation.
+See http://www.eriksmistad.no/marching-cubes-implementation-using-opencl-and-opengl/ for detailed information about this implementation.
+
+*Note that this software has been moved into the [FAST framework](https://github.com/smistad/FAST/) where it is further developed and maintained.*
 
 Dependencies
 ========================================
